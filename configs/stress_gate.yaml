@@ -5,7 +5,7 @@
 
 scenario:
   name: "Stress Gate Monte Carlo"
-  duration_seconds: 20  # Reduced to 20s for faster Monte Carlo runs
+  duration_seconds: 50  
   seed: null  # Will be overridden by stress mode with sequential seeds
 
 environment:
