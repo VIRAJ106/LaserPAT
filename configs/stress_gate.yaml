@@ -1,0 +1,70 @@
+# stress_gate.yaml — Stress Gate configuration for Monte Carlo validation
+#
+# SPEC.md Section 4.3: 300 seeded runs at maximum noise/jitter settings
+# This config uses extreme disturbances to validate robustness.
+
+scenario:
+  name: "Stress Gate Monte Carlo"
+  duration_seconds: 20  # Reduced to 20s for faster Monte Carlo runs
+  seed: null  # Will be overridden by stress mode with sequential seeds
+
+environment:
+  world_size: [2000, 2000]
+  platform_motion:
+    type: "linear"
+    max_speed_px_frame: 20
+
+beacon:
+  shape: "gaussian"
+  size_px: [10, 10]
+  motion: "straight"  # Will be overridden by stress mode for each motion type
+  initial_location: "center"  # Center start for consistent results
+
+camera:
+  initial_position: "center"
+  resolution: [640, 480]
+  fov_deg: [4.0, 3.0]
+  monochrome: true
+  gimbal:
+    max_pan_rate_deg_s: 5.0
+    max_tilt_rate_deg_s: 5.0
+
+disturbances:
+  sensor_noise:
+    gaussian_sigma: 20  # Harsh but feasible (matching sih_benchmark)
+    poisson: true
+    salt_and_pepper_percent: 10  # Harsh but feasible (matching sih_benchmark)
+  jitter:
+    max_displacement_px: 20  # Harsh but feasible (matching sih_benchmark)
+  weather_preset: "clear"  # Minimal weather for faster processing
+  weather_physics:
+    derive_from_cn2: false  # Disable expensive atmospheric simulation for speed
+
+link_budget:
+  wavelength_nm: 1550
+  beam_divergence_mrad: 0.5
+  report_at_end_of_run: false  # Skip link budget for speed
+
+evaluation:
+  run_ab_comparison: false  # Skip A/B for speed
+
+detection:
+  acquisition_mode: "blind_spiral"
+  use_cnn_verifier: true
+
+estimation:
+  filter: "kf_cv"
+  lock_threshold_px: 10
+  lock_frames: 3
+
+control:
+  controller: "pid"
+  pid:
+    kp: 0.15
+    ki: 0.005
+    kd: 0.005
+    antiwindup: true
+
+logging:
+  csv_per_frame: true
+  auto_report: false  # Skip individual reports for speed

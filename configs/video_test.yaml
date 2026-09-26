@@ -1,0 +1,70 @@
+# video_test.yaml — Clean config for Benchmark Gate video testing
+#
+# This config is optimized for testing video ingestion with minimal noise
+# to validate the video processing pipeline itself.
+
+scenario:
+  name: "Video Benchmark Test"
+  duration_seconds: 10
+  seed: 42
+
+environment:
+  world_size: [2000, 2000]
+  platform_motion:
+    type: "linear"
+    max_speed_px_frame: 0
+
+beacon:
+  shape: "gaussian"
+  size_px: [20, 20]
+  motion: "circular"
+  initial_location: "center"
+
+camera:
+  initial_position: "center"
+  resolution: [640, 480]
+  fov_deg: [4.0, 3.0]
+  monochrome: true
+  gimbal:
+    max_pan_rate_deg_s: 10.0
+    max_tilt_rate_deg_s: 10.0
+
+disturbances:
+  sensor_noise:
+    gaussian_sigma: 5
+    poisson: false
+    salt_and_pepper_percent: 2
+  jitter:
+    max_displacement_px: 3
+  weather_preset: "clear"
+  weather_physics:
+    derive_from_cn2: false
+
+link_budget:
+  wavelength_nm: 1550
+  beam_divergence_mrad: 0.5
+  report_at_end_of_run: false
+
+evaluation:
+  run_ab_comparison: false
+
+detection:
+  acquisition_mode: "blind_spiral"
+  use_cnn_verifier: true
+
+estimation:
+  filter: "kf_cv"
+  lock_threshold_px: 30
+  lock_frames: 5
+
+control:
+  controller: "pid"
+  pid:
+    kp: 0.15
+    ki: 0.005
+    kd: 0.005
+    antiwindup: true
+
+logging:
+  csv_per_frame: true
+  auto_report: true

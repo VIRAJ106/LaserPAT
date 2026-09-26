@@ -1,0 +1,56 @@
+# Test config for random walk motion with boundary reflection
+world:
+  width: 2000
+  height: 2000
+
+beacon:
+  start_x: 1000
+  start_y: 1000
+  motion_type: random_walk  # Random walk motion
+  random_walk_max_step: 6.0
+
+platform:
+  start_x: 1000
+  start_y: 1000
+  motion_type: static
+  speed: 0.0
+
+camera:
+  fov_width: 640
+  fov_height: 480
+  max_slew_rate: 26.67  # px/frame at 60 FPS
+  initial_center_x: 1000
+  initial_center_y: 1000
+
+control:
+  pid_kp: 0.15
+  pid_ki: 0.005
+  pid_kd: 0.005
+  search_pattern: spiral
+  search_angular_speed: 5.0
+  search_radius_increment: 1.5
+
+detection:
+  use_ai_verifier: true
+  ai_model_path: models/patch_verifier_cnn.onnx
+  ai_threshold: 0.5
+  area_min: 40
+  area_max: 5000
+  circularity_min: 0.5
+
+estimation:
+  kalman_process_noise: 0.5
+  kalman_measurement_noise: 1.0
+
+disturbances:
+  platform_jitter_x_sigma: 0.0
+  platform_jitter_y_sigma: 0.0
+  gaussian_sigma: 0
+  poisson: false
+  salt_and_pepper_percent: 0.0
+  weather_preset: clear
+
+simulation:
+  fps: 60
+  duration_sec: 20.0
+  dt: 1.0

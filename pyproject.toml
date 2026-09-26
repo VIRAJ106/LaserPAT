@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "laserpat"
+version = "0.1.0"
+description = "Software-in-the-loop FSOC coarse alignment simulator"
+requires-python = ">=3.11"
+authors = [
+    { name="LaserPAT Team" }
+]
+dependencies = [
+    "numpy",
+    "scipy",
+    "opencv-python",
+    "onnxruntime",
+    "PySide6",
+    "pyqtgraph",
+    "pyyaml"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pyinstaller"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

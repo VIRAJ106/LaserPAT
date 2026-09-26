@@ -1,0 +1,367 @@
+/* ═══════════════════════════════════════════════════════════════════
+   LaserPAT — Premium Cyber-Dark Dashboard Theme
+   Focuses on sleek typography, vivid gradients, and smooth glassmorphism.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ───────────────────────────────────────────────────────────────────
+   Global Application & Typography
+   ─────────────────────────────────────────────────────────────────── */
+QMainWindow, QDialog {
+    background-color: #0c0c0e; /* Deep rich dark background */
+}
+
+QWidget {
+    /* Use universally available high-quality modern fonts */
+    font-family: "Segoe UI Variable Display", "Segoe UI", "Helvetica Neue", "Arial", sans-serif;
+    color: #e4e4e7; /* crisp white/gray */
+    font-size: 10pt;
+}
+
+QWidget#sidebar {
+    background-color: #121214; 
+    border-right: 1px solid #27272a; 
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   Typography Headings
+   ─────────────────────────────────────────────────────────────────── */
+QLabel#logoLabel {
+    font-size: 24pt;
+    font-weight: 400;
+    color: #ffffff;
+    letter-spacing: 2px;
+}
+QLabel#logoLabel b {
+    font-weight: 800;
+    color: #3b82f6; /* Vivid blue accent */
+}
+
+QLabel#pageTitle {
+    font-size: 22pt;
+    font-weight: 700;
+    color: #38bdf8; 
+    margin-bottom: 15px;
+    letter-spacing: 1px;
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   Sidebar Navigation List
+   ─────────────────────────────────────────────────────────────────── */
+QListWidget#navList {
+    background: transparent;
+    border: none;
+    outline: none;
+}
+
+QListWidget#navList::item {
+    padding: 12px 18px;
+    margin: 6px 0px;
+    border-radius: 8px;
+    font-size: 11pt;
+    font-weight: 600;
+    color: #71717a;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+QListWidget#navList::item:hover {
+    background-color: #1f1f22;
+    color: #e4e4e7;
+}
+
+QListWidget#navList::item:selected {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 rgba(59, 130, 246, 0.2), stop: 1 rgba(59, 130, 246, 0.05));
+    color: #3b82f6;
+    border-left: 4px solid #3b82f6;
+    font-weight: 800;
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   Group Boxes / Cards (Glassmorphic panels)
+   ─────────────────────────────────────────────────────────────────── */
+QGroupBox {
+    background-color: #141417;
+    border: 1px solid #27272a; 
+    border-radius: 10px;
+    margin-top: 18px; 
+    padding: 16px 12px 12px 12px;
+}
+
+QGroupBox:hover {
+    border: 1px solid #3f3f46;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 15px;
+    padding: 0 6px;
+    color: #a1a1aa;
+    font-weight: 700;
+    font-size: 10pt;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   State Badge
+   ─────────────────────────────────────────────────────────────────── */
+QLabel#stateBadge {
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 13pt;
+    font-weight: 900;
+    color: #10b981; 
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    background-color: rgba(16, 185, 129, 0.1);
+    border-radius: 6px;
+    letter-spacing: 2px;
+    padding: 8px 10px;
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   Buttons (Modern Glass/Outline style)
+   ─────────────────────────────────────────────────────────────────── */
+QPushButton {
+    background-color: #1f1f22;
+    color: #e4e4e7;
+    border: 1px solid #3f3f46;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-weight: 700;
+    font-size: 10pt;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+QPushButton:hover {
+    background-color: #27272a;
+    border-color: #52525b;
+}
+
+QPushButton:pressed {
+    background-color: #3f3f46;
+}
+
+QPushButton:disabled {
+    background-color: #0c0c0e;
+    color: #52525b;
+    border-color: #27272a;
+}
+
+/* Primary Accent Buttons */
+QPushButton#btnStart {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1, stop: 0 #2563eb, stop: 1 #3b82f6);
+    color: white;
+    border: none;
+    font-weight: 800;
+}
+QPushButton#btnStart:hover {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1, stop: 0 #1d4ed8, stop: 1 #2563eb);
+}
+
+QPushButton#btnStop {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1, stop: 0 #dc2626, stop: 1 #ef4444);
+    color: white;
+    border: none;
+    font-weight: 800;
+}
+QPushButton#btnStop:hover {
+    background-color: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1, stop: 0 #b91c1c, stop: 1 #dc2626);
+}
+
+QPushButton#btnLoadVideo {
+    background-color: rgba(139, 92, 246, 0.15);
+    color: #a78bfa;
+    border-color: rgba(139, 92, 246, 0.4);
+}
+QPushButton#btnLoadVideo:hover {
+    background-color: rgba(139, 92, 246, 0.25);
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   Video Feed (Camera)
+   ─────────────────────────────────────────────────────────────────── */
+QLabel#videoFeed {
+    background-color: #000000;
+    border: 2px solid #27272a;
+    border-radius: 8px;
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   Inputs (ComboBox, LineEdit, SpinBox)
+   ─────────────────────────────────────────────────────────────────── */
+QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit {
+    background-color: #0c0c0e;
+    border: 1px solid #27272a;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #f4f4f5;
+    font-weight: 500;
+}
+
+QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QLineEdit:hover {
+    border: 1px solid #52525b;
+}
+
+QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QLineEdit:focus {
+    border: 1px solid #3b82f6;
+    background-color: #121214;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 28px;
+}
+
+QComboBox::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #a1a1aa;
+    margin-right: 8px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #18181b;
+    border: 1px solid #3f3f46;
+    selection-background-color: #2563eb;
+    selection-color: #ffffff;
+    color: #e4e4e7;
+    border-radius: 6px;
+    outline: none;
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   Sliders (Modern thick track)
+   ─────────────────────────────────────────────────────────────────── */
+QSlider::groove:horizontal {
+    background: #27272a;
+    height: 6px;
+    border-radius: 3px;
+}
+
+QSlider::sub-page:horizontal {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #3b82f6, stop: 1 #60a5fa);
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: #ffffff;
+    width: 16px;
+    height: 16px;
+    margin: -5px 0;
+    border-radius: 8px;
+    box-shadow: 0px 2px 4px rgba(0,0,0,0.5);
+}
+
+QSlider::handle:horizontal:hover {
+    background: #bfdbfe;
+    transform: scale(1.1);
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   Scroll Bars
+   ─────────────────────────────────────────────────────────────────── */
+QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    border: none;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: #3f3f46;
+    border-radius: 4px;
+    min-height: 24px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #52525b;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   Checkboxes
+   ─────────────────────────────────────────────────────────────────── */
+QCheckBox {
+    spacing: 12px;
+    color: #a1a1aa;
+    font-weight: 600;
+}
+QCheckBox:hover {
+    color: #f4f4f5;
+}
+
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #3f3f46;
+    border-radius: 4px;
+    background: #0c0c0e;
+}
+
+QCheckBox::indicator:checked {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    image: none; /* Can't natively use SVG check easily without resources, rely on color block */
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   Tab Widget
+   ─────────────────────────────────────────────────────────────────── */
+QTabWidget::pane {
+    border: 1px solid #27272a;
+    background: #121214;
+    border-radius: 10px;
+    top: -1px;
+}
+
+QTabBar::tab {
+    background: transparent;
+    color: #71717a;
+    padding: 12px 24px;
+    border: none;
+    font-weight: 700;
+    font-size: 11pt;
+    letter-spacing: 1px;
+    border-bottom: 3px solid transparent;
+}
+
+QTabBar::tab:selected {
+    color: #3b82f6; 
+    border-bottom: 3px solid #3b82f6;
+}
+
+QTabBar::tab:hover {
+    color: #e4e4e7;
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   Stat Labels
+   ─────────────────────────────────────────────────────────────────── */
+QLabel[class="stat"] {
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 12pt;
+    font-weight: 800;
+    color: #60a5fa; 
+    background-color: rgba(59, 130, 246, 0.1);
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+QLabel#restartHint {
+    color: #f43f5e; /* Rose 500 */
+    font-weight: 800;
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+QFormLayout QLabel {
+    color: #a1a1aa;
+    font-weight: 500;
+}

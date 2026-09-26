@@ -1,0 +1,73 @@
+# sih_benchmark.yaml — Official SIH 2169 benchmark configuration
+# 120-second run, haze conditions, seed 0. Used for final scoring.
+# Do NOT change seed or duration before submission.
+
+scenario:
+  name: "SIH Problem 22169 Benchmark"
+  duration_seconds: 120          # mandatory — do not reduce
+  seed: 0                        # fixed seed for reproducibility
+
+environment:
+  world_size: [2000, 2000]
+  platform_motion:
+    type: "static"           # Platform is stationary — isolates tracker performance
+    max_speed_px_frame: 0
+
+beacon:
+  shape: "gaussian"
+  size_px: [20, 20]           # Gaussian spot at 500km range, beam div 0.5mrad → ~20px
+  target_size_px: [-1, -1]   # auto-match beacon size_px (size discriminator reference)
+  motion: "straight"
+  initial_location: "random"
+  num_beacons: 1
+
+camera:
+  initial_position: "center"
+  resolution: [640, 480]
+  fov_deg: [4.0, 3.0]
+  monochrome: true
+  gimbal:
+    max_pan_rate_deg_s: 5.0
+    max_tilt_rate_deg_s: 5.0
+
+disturbances:
+  sensor_noise:
+    gaussian_sigma: 20
+    poisson: true
+    salt_and_pepper_percent: 10
+  jitter:
+    max_displacement_px: 20
+  weather_preset: "haze"         # mandated by SIH problem statement
+  weather_physics:
+    derive_from_cn2: true
+    cn2_ground: 1.7e-14
+    wind_rms_speed: 21
+
+link_budget:
+  wavelength_nm: 1550
+  beam_divergence_mrad: 0.5
+  report_at_end_of_run: true
+
+evaluation:
+  run_ab_comparison: true
+
+detection:
+  acquisition_mode: "blind_spiral"
+  use_cnn_verifier: true
+
+estimation:
+  filter: "kf_cv"
+  lock_threshold_px: 10
+  lock_frames: 3
+
+control:
+  controller: "pid"
+  pid:
+    kp: 0.15
+    ki: 0.005
+    kd: 0.005
+    antiwindup: true
+
+logging:
+  csv_per_frame: true
+  auto_report: true

@@ -1,0 +1,71 @@
+# fog_random.yaml — Dense fog, random-walk beacon motion
+# Stress-tests detection under heavy atmospheric degradation and
+# unpredictable target manoeuvring.
+
+scenario:
+  name: "Fog Random Walk Stress"
+  duration_seconds: 60
+  seed: 42
+
+environment:
+  world_size: [2000, 2000]
+  platform_motion:
+    type: "random_walk"
+    max_speed_px_frame: 20
+
+beacon:
+  shape: "gaussian"
+  size_px: [10, 10]
+  motion: "random_walk"
+  initial_location: "random"
+
+camera:
+  initial_position: "center"
+  resolution: [640, 480]
+  fov_deg: [4.0, 3.0]
+  monochrome: true
+  gimbal:
+    max_pan_rate_deg_s: 5.0
+    max_tilt_rate_deg_s: 5.0
+
+disturbances:
+  sensor_noise:
+    gaussian_sigma: 35         # heavy noise in fog
+    poisson: true
+    salt_and_pepper_percent: 15
+  jitter:
+    max_displacement_px: 30
+  weather_preset: "fog"
+  weather_physics:
+    derive_from_cn2: true
+    cn2_ground: 5.0e-14        # strong turbulence
+    wind_rms_speed: 28
+
+link_budget:
+  wavelength_nm: 1550
+  beam_divergence_mrad: 0.5
+  report_at_end_of_run: true
+
+evaluation:
+  run_ab_comparison: true
+
+detection:
+  acquisition_mode: "blind_spiral"
+  use_cnn_verifier: true
+
+estimation:
+  filter: "kf_cv"
+  lock_threshold_px: 15        # slightly relaxed for fog
+  lock_frames: 5
+
+control:
+  controller: "pid"
+  pid:
+    kp: 0.15
+    ki: 0.005
+    kd: 0.005
+    antiwindup: true
+
+logging:
+  csv_per_frame: true
+  auto_report: true
