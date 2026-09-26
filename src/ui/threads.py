@@ -319,6 +319,14 @@ class ProcessingWorker(QThread):
         self.running = False
         self.current_state = "IDLE"  # NEW: Track current state for world view
         
+        from src.detection.neural import NeuralDetector
+        import os
+        
+        # PRIMARY DETECTOR: YOLOv8 (AI-based perception)
+        yolo_path = "models/yolov8n.onnx"
+        self.yolo_detector = NeuralDetector(yolo_path) if os.path.exists(yolo_path) else None
+        
+        # VERIFIER: CNN Patch Verifier (used if OpenCV fallback is triggered)
         self.ai_verifier = AIVerifier("models/patch_verifier_cnn.onnx")
         self.kf = KalmanFilterCV(dt=1.0/60.0)
         self.sm = StateMachine(lock_threshold_px=self.cfg.estimation.lock_threshold_px,
@@ -391,18 +399,27 @@ class ProcessingWorker(QThread):
                 self.cfg.disturbances.salt_and_pepper_percent
             )
             
-            candidates = extract_candidates(noisy)
-
-            # ── Size Discriminator ──
-            # Filter candidates to those whose bounding box matches the target size,
-            # which perfectly rejects random noise blobs.
-            target_sz = self.cfg.beacon.target_size_px
-            ref_w = target_sz[0] if target_sz[0] > 0 else self.cfg.beacon.size_px[0]
-            ref_h = target_sz[1] if target_sz[1] > 0 else self.cfg.beacon.size_px[1]
-            candidates = size_discriminate(
-                candidates, ref_w, ref_h,
-                tolerance=self.cfg.beacon.size_tolerance
-            )
+            # ── AI-First Detection Pipeline (YOLOv8 + OpenCV Fallback) ──
+            # Attempt primary detection with YOLOv8 if available
+            ai_active_primary = False
+            if hasattr(self, 'yolo_detector') and self.yolo_detector is not None:
+                candidates = self.yolo_detector.detect(noisy)
+                if len(candidates) > 0:
+                    ai_active_primary = True
+            
+            # If AI primary detector fails or is missing, use OpenCV classical fallback
+            if not ai_active_primary:
+                candidates = extract_candidates(noisy)
+                # ── Size Discriminator ──
+                # Filter candidates to those whose bounding box matches the target size,
+                # which perfectly rejects random noise blobs.
+                target_sz = self.cfg.beacon.target_size_px
+                ref_w = target_sz[0] if target_sz[0] > 0 else self.cfg.beacon.size_px[0]
+                ref_h = target_sz[1] if target_sz[1] > 0 else self.cfg.beacon.size_px[1]
+                candidates = size_discriminate(
+                    candidates, ref_w, ref_h,
+                    tolerance=self.cfg.beacon.size_tolerance
+                )
             
             valid_det = False
             err = float('inf')
@@ -427,8 +444,19 @@ class ProcessingWorker(QThread):
                 ai_active = any(s > 0.1 for s in scores)
                 
                 best_idx = -1
-                if ai_active:
-                    # AI path: pick highest score above threshold
+                if ai_active_primary:
+                    # Primary YOLOv8 already evaluated the boxes
+                    # Pick the largest or highest confidence (here we just pick largest for simplicity since NeuralDetector currently doesn't return conf)
+                    best_area = 0
+                    for i, cand in enumerate(candidates):
+                        x, y, w, h, *_ = cand
+                        area = w * h
+                        if area > best_area:
+                            best_area = area
+                            best_idx = i
+                            best_score = 0.9 # High confidence from YOLO
+                elif ai_active:
+                    # AI Verification path (OpenCV + CNN patch verifier): pick highest score above threshold
                     for i, score in enumerate(scores):
                         if score > 0.5 and score > best_score:
                             best_score = score

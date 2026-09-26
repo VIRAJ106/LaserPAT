@@ -48,14 +48,14 @@ def create_test_config(motion_type: str, output_path: str) -> str:
             "world_size": [2000, 2000],
             "platform_motion": {
                 "type": "linear",
-                "max_speed_px_frame": 10,  # Reduced from 20 to reduce difficulty
+                "max_speed_px_frame": 20,
             }
         },
         "beacon": {
             "shape": "square",
             "size_px": [10, 10],
             "motion": motion_type,
-            "initial_location": "center",  # Start at center instead of random for consistent tests
+            "initial_location": "random",
         },
         "camera": {
             "initial_position": "center",
@@ -69,12 +69,12 @@ def create_test_config(motion_type: str, output_path: str) -> str:
         },
         "disturbances": {
             "sensor_noise": {
-                "gaussian_sigma": 10,  # Reduced from 20 to make detection easier
+                "gaussian_sigma": 20,
                 "poisson": True,
-                "salt_and_pepper_percent": 5,  # Reduced from 10 to make detection easier
+                "salt_and_pepper_percent": 10,
             },
             "jitter": {
-                "max_displacement_px": 10,  # Reduced from 20 to make tracking easier
+                "max_displacement_px": 20,
             },
             "weather_preset": "clear",
             "weather_physics": {

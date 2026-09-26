@@ -51,6 +51,6 @@ disturbances:
   weather_preset: clear
 
 simulation:
-  fps: 60
+  fps: 30
   duration_sec: 20.0
-  dt: 1.0
+  # Removed dt: 1.0 to avoid ambiguity; simulator uses dt = 1/fps
