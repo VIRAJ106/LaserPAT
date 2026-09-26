@@ -34,10 +34,10 @@ disturbances:
   sensor_noise:
     gaussian_sigma: 20
     poisson: true
-    salt_and_pepper_percent: 10
+    salt_and_pepper_percent: 0
   jitter:
     max_displacement_px: 20
-  weather_preset: "haze"         # mandated by SIH problem statement
+  weather_preset: "clear"         # updated from haze to clear based on user request
   weather_physics:
     derive_from_cn2: true
     cn2_ground: 1.7e-14
