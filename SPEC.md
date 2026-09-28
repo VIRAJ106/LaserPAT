@@ -2,7 +2,7 @@
 
 This document serves as the official source of truth for the definition of all tracking metrics, states, and performance constraints evaluated in LaserPAT. It is directly mapped to the SIH26169 problem statement.
 
-## 1. Tracking State Machine
+## 1. Tracking State Machine:-
 
 The system transitions between the following states:
 - `IDLE`: System is initialized but not yet active.
