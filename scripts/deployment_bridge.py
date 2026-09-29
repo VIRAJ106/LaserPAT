@@ -89,7 +89,7 @@ def _run_sim(args: argparse.Namespace) -> int:
             with open(json_output, 'w') as f:
                 json.dump(stats, f, indent=2)
             
-            print(f"\n[Bridge] Stress report → {json_output}")
+            print(f"\n[Bridge] Stress report -> {json_output}")
             _print_stress_summary(stats)
         
     else:
@@ -307,12 +307,16 @@ def _run_export(args: argparse.Namespace) -> int:
 #define KF_Q_NOISE {q}f
 #define KF_R_NOISE {r}f
 
+// PAT Supervisor State Machine
+#define PAT_LOCK_THRESHOLD_PX {cfg.estimation.lock_threshold_px}f
+#define PAT_REQUIRED_LOCK_FRAMES {cfg.estimation.lock_frames}
+
 #endif // LASERPAT_CONFIG_H
 """
     try:
         with open(output, "w") as f:
             f.write(header)
-        print(f"[Bridge] C-struct header written → {output}")
+        print(f"[Bridge] C-struct header written -> {output}")
     except OSError as exc:
         print(f"[Bridge] ERROR writing C-struct header: {exc}", file=sys.stderr)
         return 1

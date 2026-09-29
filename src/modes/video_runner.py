@@ -1,8 +1,9 @@
 """
 video_runner.py — Headless video-file runner for LaserPAT.
 
-Reads an .mp4 / .avi file frame-by-frame, runs the full
-Detect → KF → Control pipeline, and writes a per-frame CSV log.
+Reads an .mp4 / .avi file frame-by-frame, runs the *same* canonical
+Detect → CandidateManager → PATSupervisor → Control pipeline used by
+scenario_runner.py.  This ensures Desktop result == Video result.
 
 Entry point
 -----------
@@ -25,30 +26,20 @@ import sys
 import time
 from pathlib import Path
 
-import cv2
 import numpy as np
 
 from src.config import load_config
-from src.detection.classical import extract_candidates, calculate_centroid
-from src.detection.ai_verifier import AIVerifier
-from src.estimation.kalman import KalmanFilterCV
-from src.estimation.state_machine import StateMachine, TrackingState
-from src.control.pid import PIDController
-from src.control.search_patterns import SpiralSearch
+
+# Unified perception pipeline (shared with scenario_runner)
+from src.camera.camera_source import VideoCameraSource
+from src.detection.perception import build_perception
+from src.detection.candidate_manager import CandidateManager
+from src.estimation.pat_supervisor import PATSupervisor
+from src.estimation.state_machine import TrackingState
 from src.logging.csv_logger import CSVLogger, FrameRecord
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _to_grayscale(frame: np.ndarray) -> np.ndarray:
-    """Convert BGR / BGRA / already-gray frame to uint8 2-D array."""
-    if frame.ndim == 2:
-        return frame
-    if frame.shape[2] == 4:
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-    return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+# (helper _to_grayscale is now inside VideoCameraSource)
 
 
 # ---------------------------------------------------------------------------
@@ -88,145 +79,114 @@ def run_video(
         output_csv = os.path.join("logs", f"{stem}_{int(time.time())}.csv")
 
     # ------------------------------------------------------------------
-    # Open video
+    # Open video via CameraSource abstraction
     # ------------------------------------------------------------------
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise FileNotFoundError(f"Cannot open video file: {video_path!r}")
+    with VideoCameraSource(video_path, grayscale=True) as cam:
+        fps          = cam.fps
+        total_frames = cam.total_frames
+        frame_w      = cam.frame_width
+        frame_h      = cam.frame_height
+        dt           = 1.0 / fps
 
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    frame_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    dt = 1.0 / fps
-
-    if verbose:
-        print(
-            f"[VideoRunner] {video_path}  "
-            f"{frame_w}×{frame_h} @ {fps:.1f} fps  "
-            f"({total_frames} frames)"
-        )
-
-    # ------------------------------------------------------------------
-    # Initialise pipeline components (no GUI)
-    # ------------------------------------------------------------------
-    # ONNX model path — try both relative and exe-local locations
-    onnx_candidates = [
-        "models/patch_verifier_cnn.onnx",
-        os.path.join(os.path.dirname(__file__), "..", "..", "models", "patch_verifier_cnn.onnx"),
-    ]
-    onnx_path = next((p for p in onnx_candidates if os.path.exists(p)), onnx_candidates[0])
-
-    use_verifier = cfg.detection.use_cnn_verifier and os.path.exists(onnx_path)
-    ai_verifier = AIVerifier(onnx_path) if use_verifier else None
-
-    kf = KalmanFilterCV(dt=dt)
-    sm = StateMachine(
-        lock_threshold_px=cfg.estimation.lock_threshold_px,
-        required_lock_frames=cfg.estimation.lock_frames,
-    )
-
-    # Gimbal virtual position — centre of frame initially
-    gim_x, gim_y = frame_w / 2.0, frame_h / 2.0
-    max_v = max(frame_w, frame_h) * 0.05  # 5 % of frame per step
-
-    pid_x = PIDController(cfg.control.kp, cfg.control.ki, cfg.control.kd, max_v)
-    pid_y = PIDController(cfg.control.kp, cfg.control.ki, cfg.control.kd, max_v)
-    search = SpiralSearch(gim_x, gim_y, fov_size=min(frame_w, frame_h))
-
-    sm.start_search()
-
-    # ------------------------------------------------------------------
-    # Main loop
-    # ------------------------------------------------------------------
-    t_start = time.perf_counter()
-    frame_idx = 0
-
-    with CSVLogger(output_csv) as logger:
-        while True:
-            ret, bgr = cap.read()
-            if not ret:
-                break
-
-            gray = _to_grayscale(bgr)
-            timestamp = frame_idx * dt
-
-            # ---- Detection ------------------------------------------
-            candidates = extract_candidates(gray)
-            valid_detection = False
-            det_x = det_y = 0.0
-            euclidean_error = float("inf")
-            ai_score = 0.0
-
-            if candidates:
-                centroids = [calculate_centroid(gray, c) for c in candidates]
-
-                if ai_verifier is not None:
-                    scores = ai_verifier.extract_and_verify(gray, centroids)
-                else:
-                    # Fallback: treat every candidate as equally probable
-                    scores = [0.6] * len(centroids)
-
-                best_score = 0.0
-                best_idx = -1
-                for i, s in enumerate(scores):
-                    if s > 0.5 and s > best_score:
-                        best_score = s
-                        best_idx = i
-
-                if best_idx != -1:
-                    det_x, det_y = centroids[best_idx]
-                    valid_detection = True
-                    ai_score = best_score
-                    euclidean_error = math.hypot(det_x - gim_x, det_y - gim_y)
-
-            # ---- Estimation -----------------------------------------
-            kf.predict()
-            if valid_detection:
-                valid_detection = kf.update(det_x, det_y)
-
-            state = sm.update(valid_detection, euclidean_error)
-
-            # ---- Control --------------------------------------------
-            if state == TrackingState.SEARCH:
-                sx, sy = search.step(dt)
-                gim_x, gim_y = sx, sy
-            else:
-                search.reset(gim_x, gim_y)
-                pred_x, pred_y = kf.get_position()
-                vx = pid_x.compute(pred_x - gim_x)
-                vy = pid_y.compute(pred_y - gim_y)
-                gim_x = np.clip(gim_x + vx, 0, frame_w - 1)
-                gim_y = np.clip(gim_y + vy, 0, frame_h - 1)
-
-            # ---- Log ------------------------------------------------
-            record = FrameRecord(
-                frame_id=frame_idx,
-                timestamp=round(timestamp, 4),
-                state=state.name,
-                tracking_error_px=round(euclidean_error, 3) if not math.isinf(euclidean_error) else -1.0,
-                gimbal_x=round(gim_x, 2),
-                gimbal_y=round(gim_y, 2),
-                target_x=round(det_x, 2),
-                target_y=round(det_y, 2),
-                ai_score=round(ai_score, 4),
-                weather_preset=cfg.disturbances.weather_preset,
-                innovation_gate_passed=valid_detection or (euclidean_error == float("inf")),
+        if verbose:
+            print(
+                f"[VideoRunner] {video_path}  "
+                f"{frame_w}×{frame_h} @ {fps:.1f} fps  "
+                f"({total_frames} frames)"
             )
-            logger.log_frame(record)
 
-            if verbose and frame_idx % 30 == 0:
-                elapsed = time.perf_counter() - t_start
-                pct = (frame_idx / total_frames * 100) if total_frames > 0 else 0
-                print(
-                    f"  [{pct:5.1f}%] frame {frame_idx:5d} | "
-                    f"state={state.name:<8} | err={euclidean_error:7.2f}px | "
-                    f"elapsed={elapsed:.1f}s"
+        # ------------------------------------------------------------------
+        # Initialise shared pipeline components
+        # ------------------------------------------------------------------
+        perception   = build_perception(cfg)          # same factory as scenario_runner
+        cand_manager = CandidateManager()             # same class as scenario_runner
+
+        # Virtual gimbal position (video mode — no real gimbal)
+        gim_x, gim_y = frame_w / 2.0, frame_h / 2.0
+
+        # PATSupervisor needs environment world_size; use frame dims as world
+        # We patch cfg.environment.world_size to match video frame dims
+        cfg.environment.world_size = (frame_w, frame_h)
+        supervisor = PATSupervisor(cfg, dt=dt)
+        supervisor.start_search()
+
+        # ------------------------------------------------------------------
+        # Main loop
+        # ------------------------------------------------------------------
+        t_start   = time.perf_counter()
+        frame_idx = 0
+
+        with CSVLogger(output_csv) as logger:
+            while cam.is_available():
+                gray = cam.capture_frame()
+                if gray is None:
+                    break
+
+                timestamp = frame_idx * dt
+
+                # ── Perceive (shared pipeline) ─────────────────────────
+                percept_result = perception.run(gray, frame_id=frame_idx)
+
+                # ── Candidate management (shared pipeline) ─────────────
+                identity = cand_manager.update(percept_result)
+
+                # ── PAT supervisor (shared pipeline) ───────────────────
+                cmd = supervisor.step(identity, gimbal_x=gim_x, gimbal_y=gim_y)
+
+                # Apply virtual gimbal from command
+                if cmd.mode == "POSITION":
+                    # Slew at max rate (5% of frame per step)
+                    max_v = max(frame_w, frame_h) * 0.05
+                    dx = cmd.x - gim_x
+                    dy = cmd.y - gim_y
+                    dist = math.hypot(dx, dy)
+                    if dist > 0:
+                        step = min(dist, max_v)
+                        gim_x += (dx / dist) * step
+                        gim_y += (dy / dist) * step
+                elif cmd.mode == "VELOCITY":
+                    gim_x = float(np.clip(gim_x + cmd.x, 0, frame_w - 1))
+                    gim_y = float(np.clip(gim_y + cmd.y, 0, frame_h - 1))
+
+                # ── Extract telemetry for log ───────────────────────────
+                ai_score = (
+                    identity.candidate.ai_confidence
+                    if identity and identity.is_valid else 0.0
+                )
+                det_x = identity.candidate.cx if identity and identity.is_valid else 0.0
+                det_y = identity.candidate.cy if identity and identity.is_valid else 0.0
+                euclidean_error = (
+                    math.hypot(det_x - gim_x, det_y - gim_y)
+                    if identity and identity.is_valid else float("inf")
                 )
 
-            frame_idx += 1
+                # ── Log ────────────────────────────────────────────────
+                record = FrameRecord(
+                    frame_id=frame_idx,
+                    timestamp=round(timestamp, 4),
+                    state=cmd.pat_state,
+                    tracking_error_px=round(euclidean_error, 3) if not math.isinf(euclidean_error) else -1.0,
+                    gimbal_x=round(gim_x, 2),
+                    gimbal_y=round(gim_y, 2),
+                    target_x=round(det_x, 2),
+                    target_y=round(det_y, 2),
+                    ai_score=round(ai_score, 4),
+                    weather_preset=cfg.disturbances.weather_preset,
+                    innovation_gate_passed=(identity is not None and identity.is_valid),
+                )
+                logger.log_frame(record)
 
-    cap.release()
+                if verbose and frame_idx % 30 == 0:
+                    elapsed = time.perf_counter() - t_start
+                    pct = (frame_idx / total_frames * 100) if total_frames > 0 else 0
+                    print(
+                        f"  [{pct:5.1f}%] frame {frame_idx:5d} | "
+                        f"state={cmd.pat_state:<10} | "
+                        f"backend={percept_result.backend_used} | "
+                        f"err={euclidean_error:7.2f}px | elapsed={elapsed:.1f}s"
+                    )
+
+                frame_idx += 1
 
     elapsed_total = time.perf_counter() - t_start
     if verbose:

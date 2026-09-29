@@ -62,6 +62,7 @@ class DisturbancesConfig:
 class DetectionConfig:
     acquisition_mode: str = "blind_spiral"
     use_cnn_verifier: bool = True
+    backend: str = "classical_cnn"   # "classical_cnn" | "yolo"  (default: classical_cnn)
 
 @dataclass
 class EstimationConfig:
@@ -162,6 +163,7 @@ def load_config(path: str) -> AppConfig:
     if 'detection' in data:
         cfg.detection.acquisition_mode = data['detection'].get('acquisition_mode', 'blind_spiral')
         cfg.detection.use_cnn_verifier = data['detection'].get('use_cnn_verifier', True)
+        cfg.detection.backend          = data['detection'].get('backend', 'classical_cnn')
         
     if 'estimation' in data:
         cfg.estimation.filter_type = data['estimation'].get('filter', 'kf_cv')

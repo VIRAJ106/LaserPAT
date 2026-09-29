@@ -49,6 +49,7 @@ evaluation:
 detection:
   acquisition_mode: "blind_spiral"
   use_cnn_verifier: true
+  backend: "classical_cnn"
 
 estimation:
   filter: "kf_cv"
