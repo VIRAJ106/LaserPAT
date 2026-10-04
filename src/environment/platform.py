@@ -15,17 +15,10 @@ class Platform:
     def step(self, dt: float = 1.0) -> Tuple[float, float]:
         base_x, base_y = self.motion.step(dt)
         
-        # NEW: Only add jitter if platform is actually moving
-        # Check if motion model has meaningful speed (not just static)
-        is_moving = False
-        if hasattr(self.motion, 'speed') and self.motion.speed > 0.001:
-            is_moving = True
-        elif hasattr(self.motion, 'vx') and hasattr(self.motion, 'vy'):
-            if abs(self.motion.vx) > 0.001 or abs(self.motion.vy) > 0.001:
-                is_moving = True
-        
-        # Add high-frequency jitter ONLY when moving
-        if self.jitter_max_px > 0 and is_moving:
+        # Mechanical jitter is independent of platform translational motion.
+        # Vibration sources (fans, electronics, structural resonance) exist
+        # even when platform is stationary.
+        if self.jitter_max_px > 0:
             jx = self._rng.uniform(-self.jitter_max_px, self.jitter_max_px)
             jy = self._rng.uniform(-self.jitter_max_px, self.jitter_max_px)
             self.x = base_x + jx
