@@ -16,7 +16,7 @@ environment:
 beacon:
   shape: "gaussian"
   size_px: [20, 20]           # Gaussian spot at 500km range, beam div 0.5mrad → ~20px
-  target_size_px: [-1, -1]   # auto-match beacon size_px (size discriminator reference)
+  target_size_px: [0, 0]    # disabled — heavy noise makes size discrimination unreliable
   motion: "straight"
   initial_location: "random"
   num_beacons: 1
@@ -53,7 +53,9 @@ evaluation:
 
 detection:
   acquisition_mode: "blind_spiral"
-  use_cnn_verifier: true
+  use_cnn_verifier: false
+  backend: "classical_cnn"
+  threshold: 15              # Lower threshold for stressed (noisy) frames
 
 estimation:
   filter: "kf_cv"

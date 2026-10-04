@@ -73,15 +73,17 @@ class ClassicalAIPerception(PerceptionBackend):
         use_cnn: bool = True,
         target_size_px: tuple = (-1, -1),
         size_tolerance: float = 0.5,
+        detection_threshold: int = 30,
     ):
         self._verifier = AIVerifier(verifier_path)
         self._use_cnn = use_cnn
         self._target_w = target_size_px[0]
         self._target_h = target_size_px[1]
         self._tol = size_tolerance
+        self._threshold = detection_threshold
 
     def run(self, frame: np.ndarray, frame_id: int = -1) -> PerceptionResult:
-        raw_candidates = extract_candidates(frame)
+        raw_candidates = extract_candidates(frame, threshold=self._threshold)
 
         # Size discrimination
         if self._target_w > 0 and self._target_h > 0:
@@ -202,10 +204,10 @@ def build_perception(cfg) -> PerceptionBackend:
     if backend == 'yolo':
         import os
         candidates = [
-            "yolov8n.pt",
-            os.path.join(os.path.dirname(__file__), '..', '..', 'yolov8n.pt'),
+            "models/yolov8n.onnx",
+            os.path.join(os.path.dirname(__file__), '..', '..', 'models', 'yolov8n.onnx'),
         ]
-        model_path = next((p for p in candidates if os.path.exists(p)), 'yolov8n.pt')
+        model_path = next((p for p in candidates if os.path.exists(p)), 'models/yolov8n.onnx')
         return YOLOPerception(model_path=model_path)
 
     # Default: classical_cnn
@@ -230,4 +232,5 @@ def build_perception(cfg) -> PerceptionBackend:
         use_cnn=cfg.detection.use_cnn_verifier,
         target_size_px=target_size,
         size_tolerance=getattr(cfg.beacon, 'size_tolerance', 0.5),
+        detection_threshold=getattr(cfg.detection, 'threshold', 30),
     )

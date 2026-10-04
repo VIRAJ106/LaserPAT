@@ -87,15 +87,22 @@ class DisturbanceModel:
         self._jitter_max_px = self._dist.max_displacement_px
 
         # Cn² beam-wander estimate (scaled to pixels)
+        # Only apply if derive_from_cn2 is enabled — otherwise use explicit sigma
         pixels_per_deg = self._cam.resolution[0] / self._cam.fov_deg[0]
-        try:
-            self._beam_wander_px = self._turbulence.image_domain_sigma(
-                distance_km=link_distance_km,
-                pixels_per_deg=pixels_per_deg,
-                max_sigma_px=20.0,
-            )
-        except Exception:
+        derive = getattr(self._dist, 'derive_from_cn2', True)
+        if derive:
+            try:
+                self._beam_wander_px = self._turbulence.image_domain_sigma(
+                    distance_km=link_distance_km,
+                    pixels_per_deg=pixels_per_deg,
+                    max_sigma_px=20.0,
+                )
+            except Exception:
+                self._beam_wander_px = 0.0
+        else:
+            # derive_from_cn2 disabled: no turbulence blur beyond sensor noise
             self._beam_wander_px = 0.0
+
 
     # ------------------------------------------------------------------
     # Public API

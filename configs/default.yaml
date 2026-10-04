@@ -11,8 +11,8 @@ environment:
 
 beacon:
   shape: "gaussian"
-  size_px: [20, 20]           # Large enough to survive noise + threshold reliably
-  target_size_px: [-1, -1]   # -1 = auto-match beacon size_px above
+  size_px: [20, 20]
+  target_size_px: [0, 0]
   motion: "straight"
   initial_location: "center" # Start in FOV so acquisition is immediate
 
@@ -31,12 +31,12 @@ disturbances:
     poisson: false
     salt_and_pepper_percent: 0
   jitter:
-    max_displacement_px: 3
+    max_displacement_px: 1
   weather_preset: "clear"      # Clear sky for default baseline
   weather_physics:
-    derive_from_cn2: true
-    cn2_ground: 1.7e-14
-    wind_rms_speed: 21
+    derive_from_cn2: false     # Use explicit gaussian_sigma above; Cn2 used for link budget only
+    cn2_ground: 1.0e-17        # Realistic weak turbulence (clear open-air 1km link)
+    wind_rms_speed: 5
 
 link_budget:
   wavelength_nm: 1550
@@ -45,11 +45,6 @@ link_budget:
 
 evaluation:
   run_ab_comparison: true
-
-detection:
-  acquisition_mode: "blind_spiral"
-  use_cnn_verifier: true
-  backend: "classical_cnn"
 
 estimation:
   filter: "kf_cv"
@@ -64,6 +59,12 @@ control:
     kd: 0.008
     antiwindup: true
   lock_window_px: 2.0
+
+detection:
+  acquisition_mode: "blind_spiral"
+  use_cnn_verifier: true
+  backend: "classical_cnn"
+  threshold: 30              # Pixel intensity threshold for blob detection
 
 logging:
   csv_per_frame: true

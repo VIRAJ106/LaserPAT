@@ -183,8 +183,19 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
             # ── Step 5: Candidate management ─────────────────────────────
             identity = cand_manager.update(percept_result)
 
-            # ── Step 6: PAT supervisor → command ─────────────────────────
+            # ── Step 5b: Convert sensor-pixel candidates → world coords ───
+            # Candidates (cx,cy) are in viewport pixel space (0..W, 0..H).
+            # The Kalman filter and PID operate in world space (0..2000).
+            # Transform: world = gimbal_center - fov_half + sensor_pixel
             gx, gy = gimbal.get_position()
+            fov_half_w = cfg.camera.resolution[0] / 2.0
+            fov_half_h = cfg.camera.resolution[1] / 2.0
+            if identity is not None and identity.is_valid:
+                c = identity.candidate
+                c.cx = gx - fov_half_w + c.cx
+                c.cy = gy - fov_half_h + c.cy
+
+            # ── Step 6: PAT supervisor → command ─────────────────────────
             cmd    = supervisor.step(identity, gimbal_x=gx, gimbal_y=gy)
 
             # ── Step 7: Actuate (ServoLoop is now in the pipeline) ────────
@@ -249,7 +260,11 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
 # ---------------------------------------------------------------------------
 
 def _compute_tracking_error(identity, beacon) -> float:
-    """Return Euclidean error between detected centroid and beacon ground truth."""
+    """Return Euclidean error between detected centroid (world coords) and beacon ground truth.
+    
+    NOTE: By the time this is called, identity.candidate.cx/cy have already been
+    converted from sensor-pixel space to world space in the main loop (Step 5b).
+    """
     if identity is not None and identity.is_valid:
         return math.hypot(
             identity.candidate.cx - beacon.x,

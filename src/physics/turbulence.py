@@ -187,9 +187,11 @@ class TurbulenceModel:
             Gaussian noise σ in **pixels** (capped at max_sigma_px).
         """
         sigma_r2 = self.rytov_variance(distance_km)
-        # Empirical calibration constant: chosen so Cn²=1.7e-14, L=1km → ~15 px
-        # (moderate turbulence benchmark condition)
-        CALIBRATION = 8.0e5   # px / (√(dimensionless) · px/deg-normalised unit)
+        # Empirical calibration: Cn²=1.7e-14, L=1km, 160px/deg → ~15 px
+        # Derivation: sigma_px = C * sqrt(sigma_r2) / px_per_deg
+        #   15 = C * sqrt(0.338) / 160  → C ≈ 4125
+        # Cross-check weak: Cn²=1e-17 → sigma_r2≈2e-4 → sigma_px≈0.36px (good)
+        CALIBRATION = 4125.0
         sigma_px = CALIBRATION * math.sqrt(sigma_r2) / pixels_per_deg
         return min(sigma_px, max_sigma_px)
 

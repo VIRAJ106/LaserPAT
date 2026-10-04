@@ -64,6 +64,7 @@ class DetectionConfig:
     acquisition_mode: str = "blind_spiral"
     use_cnn_verifier: bool = True
     backend: str = "classical_cnn"   # "classical_cnn" | "yolo"  (default: classical_cnn)
+    threshold: int = 30              # Pixel intensity threshold for blob detection
 
 @dataclass
 class EstimationConfig:
