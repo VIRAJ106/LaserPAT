@@ -63,7 +63,7 @@ control:
     ki: 0.008
     kd: 0.008
     antiwindup: true
-  lock_window_px: 5.0
+  lock_window_px: 2.0
 
 logging:
   csv_per_frame: true

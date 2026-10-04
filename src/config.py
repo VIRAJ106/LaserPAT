@@ -84,7 +84,7 @@ class ControlConfig:
     ki: float = 0.05
     kd: float = 0.1
     antiwindup: bool = True
-    lock_window_px: float = 5.0
+    lock_window_px: float = 2.0
 
 @dataclass
 class AppConfig:
@@ -181,7 +181,7 @@ def load_config(path: str) -> AppConfig:
         cfg.control.ki = pid.get('ki', 0.01)
         cfg.control.kd = pid.get('kd', 0.02)
         cfg.control.antiwindup = pid.get('antiwindup', True)
-        cfg.control.lock_window_px = data['control'].get('lock_window_px', 5.0)
+        cfg.control.lock_window_px = data['control'].get('lock_window_px', 2.0)
 
     if 'link_budget' in data:
         cfg.link_budget.wavelength_nm = data['link_budget'].get('wavelength_nm', 1550.0)
