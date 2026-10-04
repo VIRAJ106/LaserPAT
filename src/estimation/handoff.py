@@ -28,6 +28,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+from src.units import px_to_urad
 
 if TYPE_CHECKING:
     from src.estimation.pat_supervisor import PATSupervisor
@@ -132,8 +133,7 @@ def evaluate_handoff(
     # Convert pixel error → microradians
     px_per_deg = res_px / fov_deg
     if math.isfinite(tracking_error_px) and tracking_error_px >= 0:
-        deg_error  = tracking_error_px / px_per_deg
-        urad_error = math.radians(deg_error) * 1e6
+        urad_error = px_to_urad(tracking_error_px, px_per_deg)
     else:
         urad_error = float('inf')
 

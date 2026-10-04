@@ -6,10 +6,11 @@ class Platform:
     """
     Simulates the motion of the FSOC terminal itself (jitter, drift).
     """
-    def __init__(self, motion_model: MotionModel, jitter_max_px: float = 0.0):
+    def __init__(self, motion_model: MotionModel, jitter_max_px: float = 0.0, rng: np.random.Generator = None):
         self.motion = motion_model
         self.x, self.y = motion_model.x, motion_model.y
         self.jitter_max_px = jitter_max_px
+        self._rng = rng if rng is not None else np.random.default_rng()
 
     def step(self, dt: float = 1.0) -> Tuple[float, float]:
         base_x, base_y = self.motion.step(dt)
@@ -25,8 +26,8 @@ class Platform:
         
         # Add high-frequency jitter ONLY when moving
         if self.jitter_max_px > 0 and is_moving:
-            jx = np.random.uniform(-self.jitter_max_px, self.jitter_max_px)
-            jy = np.random.uniform(-self.jitter_max_px, self.jitter_max_px)
+            jx = self._rng.uniform(-self.jitter_max_px, self.jitter_max_px)
+            jy = self._rng.uniform(-self.jitter_max_px, self.jitter_max_px)
             self.x = base_x + jx
             self.y = base_y + jy
         else:

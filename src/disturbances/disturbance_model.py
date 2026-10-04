@@ -129,8 +129,8 @@ class DisturbanceModel:
                 jitter_active = False
 
         if jitter_active:
-            tx = float(np.random.uniform(-self._jitter_max_px, self._jitter_max_px))
-            ty = float(np.random.uniform(-self._jitter_max_px, self._jitter_max_px))
+            tx = float(self._cfg.rng.uniform(-self._jitter_max_px, self._jitter_max_px))
+            ty = float(self._cfg.rng.uniform(-self._jitter_max_px, self._jitter_max_px))
         else:
             tx, ty = 0.0, 0.0
 
@@ -183,11 +183,11 @@ class DisturbanceModel:
 
         # 3. Sensor noise stack
         if state.sensor_poisson:
-            img = add_poisson_noise(img)
+            img = add_poisson_noise(img, self._cfg.rng)
         if state.sensor_gaussian_sigma > 0:
-            img = add_gaussian_noise(img, state.sensor_gaussian_sigma)
+            img = add_gaussian_noise(img, state.sensor_gaussian_sigma, self._cfg.rng)
         if state.sensor_sp_percent > 0:
-            img = add_salt_and_pepper_noise(img, state.sensor_sp_percent)
+            img = add_salt_and_pepper_noise(img, state.sensor_sp_percent, self._cfg.rng)
 
         return img
 

@@ -30,6 +30,7 @@ from src.estimation.kalman import KalmanFilterCV
 from src.estimation.state_machine import StateMachine, TrackingState
 from src.control.pid import PIDController
 from src.control.search_patterns import SpiralSearch, RasterSearch
+from src.units import deg_to_px
 
 
 class PATSupervisor:
@@ -66,9 +67,8 @@ class PATSupervisor:
         )
 
         # PID controllers (one per axis)
-        max_v = cfg.camera.gimbal.max_pan_rate_deg_s * (
-            cfg.camera.resolution[0] / cfg.camera.fov_deg[0]
-        ) / 30.0   # px/frame
+        px_per_deg = cfg.camera.resolution[0] / cfg.camera.fov_deg[0]
+        max_v = deg_to_px(cfg.camera.gimbal.max_pan_rate_deg_s, px_per_deg) / 30.0   # px/frame
 
         self._pid_x = PIDController(cfg.control.kp, cfg.control.ki, cfg.control.kd, max_v, dt=dt)
         self._pid_y = PIDController(cfg.control.kp, cfg.control.ki, cfg.control.kd, max_v, dt=dt)

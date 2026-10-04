@@ -58,15 +58,16 @@ class Figure8Motion(MotionModel):
         return (self.x, self.y)
 
 class RandomWalkMotion(MotionModel):
-    def __init__(self, start_pos: Tuple[float, float], max_step: float, world_bounds: Tuple[float, float] = (2000, 2000)):
+    def __init__(self, start_pos: Tuple[float, float], max_step: float, world_bounds: Tuple[float, float] = (2000, 2000), rng: np.random.Generator = None):
         super().__init__(start_pos, max_step)
         self.world_w, self.world_h = world_bounds
         self.margin = 100  # Stay 100px away from edges for safety
+        self._rng = rng if rng is not None else np.random.default_rng()
         
     def _calculate_next(self, dt: float) -> Tuple[float, float]:
         # Random walk step
-        self.x += np.random.uniform(-self.speed, self.speed)
-        self.y += np.random.uniform(-self.speed, self.speed)
+        self.x += self._rng.uniform(-self.speed, self.speed)
+        self.y += self._rng.uniform(-self.speed, self.speed)
         
         # CRITICAL FIX: Bounce off boundaries (reflect motion)
         # Keep beacon within [margin, world_size - margin]

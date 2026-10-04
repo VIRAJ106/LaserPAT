@@ -4,11 +4,12 @@ from typing import Tuple
 from src.environment.motion import MotionModel
 
 class Beacon:
-    def __init__(self, shape: str, size: Tuple[int, int], motion_model: MotionModel):
+    def __init__(self, shape: str, size: Tuple[int, int], motion_model: MotionModel, rng: np.random.Generator = None):
         self.shape = shape  # "square" or "gaussian"
         self.w, self.h = size
         self.motion = motion_model
         self.x, self.y = motion_model.x, motion_model.y
+        self._rng = rng if rng is not None else np.random.default_rng()
 
     def step(self, dt: float = 1.0) -> Tuple[float, float]:
         self.x, self.y = self.motion.step(dt)

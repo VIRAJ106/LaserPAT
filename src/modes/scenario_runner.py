@@ -66,9 +66,8 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
     # --- Beacon initial position ---
     loc = cfg.beacon.initial_location
     if loc == "random":
-        import random
-        bx = random.uniform(100, cfg.environment.world_size[0] - 100)
-        by = random.uniform(100, cfg.environment.world_size[1] - 100)
+        bx = cfg.rng.uniform(100, cfg.environment.world_size[0] - 100)
+        by = cfg.rng.uniform(100, cfg.environment.world_size[1] - 100)
     elif loc == "center":
         bx, by = world_center_x, world_center_y
     elif loc == "top-left":
@@ -86,8 +85,7 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
     # --- Beacon motion ---
     motion_type = cfg.beacon.motion.lower()
     if motion_type == "straight":
-        import random
-        angle = random.uniform(0, 2 * math.pi)
+        angle = cfg.rng.uniform(0, 2 * math.pi)
         bmotion = StraightMotion((bx, by), speed=0.5, angle_rad=angle)
     elif motion_type == "circular":
         bmotion = CircularMotion((world_center_x, world_center_y), radius=150.0, angular_speed=0.005)
@@ -101,11 +99,11 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
             f"Must be one of: straight, circular, figure8, random"
         )
 
-    beacon = Beacon(cfg.beacon.shape, cfg.beacon.size_px, bmotion)
+    beacon = Beacon(cfg.beacon.shape, cfg.beacon.size_px, bmotion, rng=cfg.rng) if 'rng' in Beacon.__init__.__code__.co_varnames else Beacon(cfg.beacon.shape, cfg.beacon.size_px, bmotion)
 
     # --- Platform (stationary relative to world by default) ---
     pmotion  = StraightMotion((bx, by), speed=0.0)
-    platform = Platform(pmotion, jitter_max_px=cfg.disturbances.max_displacement_px)
+    platform = Platform(pmotion, jitter_max_px=cfg.disturbances.max_displacement_px, rng=cfg.rng)
 
     # --- Distractor beacons (multi-beacon scenario support) ---
     distractors = _build_distractors(cfg, world_center_x, world_center_y)
@@ -262,22 +260,23 @@ def _compute_tracking_error(identity, beacon) -> float:
 
 def _build_distractors(cfg, world_cx: float, world_cy: float):
     """Instantiate distractor beacons from config."""
-    import math as _math, random as _random
+    import math as _math
     distractors = []
     for dc in getattr(cfg.beacon, 'distractors', []):
         loc = dc.initial_location
         if loc == "random":
-            dx = _random.uniform(100, cfg.environment.world_size[0] - 100)
-            dy = _random.uniform(100, cfg.environment.world_size[1] - 100)
+            dx = cfg.rng.uniform(100, cfg.environment.world_size[0] - 100)
+            dy = cfg.rng.uniform(100, cfg.environment.world_size[1] - 100)
         else:
             dx, dy = world_cx, world_cy
 
         dmotion = StraightMotion(
             (dx, dy),
             speed=0.5,
-            angle_rad=_random.uniform(0, 2 * _math.pi),
+            angle_rad=cfg.rng.uniform(0, 2 * _math.pi),
         )
-        distractors.append(Beacon(dc.shape, dc.size_px, dmotion))
+        beacon = Beacon(dc.shape, dc.size_px, dmotion, rng=cfg.rng) if 'rng' in Beacon.__init__.__code__.co_varnames else Beacon(dc.shape, dc.size_px, dmotion)
+        distractors.append(beacon)
     return distractors
 
 

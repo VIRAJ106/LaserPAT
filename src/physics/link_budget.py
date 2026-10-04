@@ -1,4 +1,5 @@
 import math
+from src.units import px_to_urad
 
 class LinkBudgetModel:
     """
@@ -33,9 +34,8 @@ class LinkBudgetModel:
         
         # 1. Convert pixel error to angular pointing error (microradians)
         px_per_deg = res_px / fov_deg
-        deg_error = pointing_error_px / px_per_deg
-        rad_error = math.radians(deg_error)
-        urad_error = rad_error * 1e6
+        urad_error = px_to_urad(pointing_error_px, px_per_deg)
+        rad_error = urad_error / 1e6
         
         # 2. Geometric Loss (Free Space Path Loss approximation for beams)
         W_L = distance_m * self.div_rad # Beam radius at distance L

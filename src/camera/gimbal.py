@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Tuple
+from src.units import deg_to_px
 
 class Gimbal:
     """
@@ -24,7 +25,7 @@ class Gimbal:
         self.px_per_deg = fov_size[0] / fov_deg[0]
         
         # Max velocity in px/frame
-        max_rate_px_s = max_rate_deg_s * self.px_per_deg
+        max_rate_px_s = deg_to_px(max_rate_deg_s, self.px_per_deg)
         self.max_v_px_frame = max_rate_px_s / fps
         
         # NEW: World bounds and FOV size for clamping
