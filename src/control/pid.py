@@ -26,6 +26,9 @@ class PIDController:
         self.prev_error = 0.0
         self._filtered_deriv = 0.0
 
+    def reset_integral(self):
+        self.integral = 0.0
+
     def compute(self, error: float) -> float:
         dt = max(self.dt, 1e-6)  # Guard against zero dt
 

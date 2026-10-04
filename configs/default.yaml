@@ -59,10 +59,11 @@ estimation:
 control:
   controller: "pid"
   pid:
-    kp: 0.15
-    ki: 0.005
-    kd: 0.005
+    kp: 0.30
+    ki: 0.008
+    kd: 0.008
     antiwindup: true
+  lock_window_px: 5.0
 
 logging:
   csv_per_frame: true
