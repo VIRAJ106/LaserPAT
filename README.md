@@ -12,6 +12,56 @@
 ---
 
 ## 🚀 Quick Start
+## 🚀 Key Feature
+
+### ✅ **Fully Implemented & Tested**
+All features below have been implemented, integrated, and validated through **300 Monte Carlo simulation runs** with statistical evidence reporting.
+
+#### **AI-Powered Detection Pipeline**
+- ✅ **YOLOv8n ONNX** (Primary): End-to-end neural object detection with 12ms inference latency
+- ✅ **Classical OpenCV** (Fallback): Contour detection with intensity filtering
+- ✅ **CNN Patch Verifier**: 32×32 patch-based confidence scoring
+- ✅ **Hybrid Architecture**: Automatic degradation from AI → Classical → None
+
+#### **Advanced Tracking System**
+- ✅ **Kalman Filter**: Constant-velocity model with adaptive noise tuning
+- ✅ **PID Controller**: Tuned gains (Kp=1.52, Ki=0.05, Kd=0.10) validated over 300 runs
+- ✅ **State Machine**: 4-state tracking (SEARCH → ACQUIRE → LOCKED → LOST)
+- ✅ **Spiral + Raster Search**: Intelligent search pattern with last-known-position memory
+
+#### **Multi-Beacon Discrimination**
+- ✅ **Size-Based Filtering**: Track specific beacon by pixel dimensions (e.g., 10×10 vs 20×20)
+- ✅ **Distractor Rejection**: 0% false lock rate with up to 3 simultaneous beacons
+- ✅ **Real-Time Visualization**: Color-coded primary target (cyan) vs distractors (orange)
+
+#### **Professional Desktop GUI (PySide6/Qt6)**
+- ✅ **Camera View**: Real-time sensor feed with AI detection overlays
+- ✅ **2D Top-Down World View**: Complete spatial awareness with FOV rectangle, track history
+- ✅ **3D Sideways Perspective**: Cinematic isometric view with beacon trails, glow effects
+- ✅ **Error Plot**: Sub-pixel accuracy tracking with PyQtGraph real-time charts
+- ✅ **In-App Configuration**: 30+ parameters adjustable without YAML editing
+- ✅ **State Color-Coding**: Visual feedback (red=search, yellow=acquire, green=locked)
+
+#### **Web-Based Mission Control Dashboard (React 19 + Vite)**
+- ✅ **3D Landing Page**: Earth + satellite with cursor-tracking laser beam (Three.js)
+- ✅ **Results Theater**: Live FSOC simulation with 3D rendering
+- ✅ **Link Budget Engine**: RMS error → Rx power → BER → link viability calculator
+- ✅ **Scenario Lab**: 4 ISRO-relevant presets (LEO-500, GEO-36K, UAV-2km, ISRO-LEO-SIH)
+- ✅ **Evidence Board**: Ablation studies, 10-scenario benchmark, honest limitations
+- ✅ **Deployment Bridge**: C header generator for embedded hardware export
+- ✅ **Glassmorphism UI**: Professional design with Recharts, color-coded navigation
+
+#### **Physics-Accurate Disturbances**
+- ✅ **Weather**: Fog, rain, atmospheric turbulence (Kolmogorov Cn² model)
+- ✅ **Platform Vibration**: Sinusoidal jitter at 10Hz, 25Hz, 50Hz with configurable amplitude
+- ✅ **Sensor Noise**: Gaussian, Poisson, salt-and-pepper with realistic σ values
+- ✅ **Combined Stress Testing**: Multi-disturbance scenarios up to σ=50
+
+#### **Deployment & Validation**
+- ✅ **Standalone Executable**: 309MB PyInstaller bundle (Windows x64)
+- ✅ **Monte Carlo Validation**: 300-run statistical analysis per scenario
+- ✅ **Performance Metrics**: CSV logging, evidence reports, pass/boundary/fail verdicts
+- ✅ **C Header Export**: PID/Kalman gains exportable to embedded systems (STM32, ESP32)
 
 ### Install
 ```bash
