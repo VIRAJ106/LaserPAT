@@ -87,15 +87,22 @@ class DisturbanceModel:
         self._jitter_max_px = self._dist.max_displacement_px
 
         # Cn² beam-wander estimate (scaled to pixels)
+        # Only apply if derive_from_cn2 is enabled — otherwise use explicit sigma
         pixels_per_deg = self._cam.resolution[0] / self._cam.fov_deg[0]
-        try:
-            self._beam_wander_px = self._turbulence.image_domain_sigma(
-                distance_km=link_distance_km,
-                pixels_per_deg=pixels_per_deg,
-                max_sigma_px=20.0,
-            )
-        except Exception:
+        derive = getattr(self._dist, 'derive_from_cn2', True)
+        if derive:
+            try:
+                self._beam_wander_px = self._turbulence.image_domain_sigma(
+                    distance_km=link_distance_km,
+                    pixels_per_deg=pixels_per_deg,
+                    max_sigma_px=20.0,
+                )
+            except Exception:
+                self._beam_wander_px = 0.0
+        else:
+            # derive_from_cn2 disabled: no turbulence blur beyond sensor noise
             self._beam_wander_px = 0.0
+
 
     # ------------------------------------------------------------------
     # Public API
@@ -129,8 +136,8 @@ class DisturbanceModel:
                 jitter_active = False
 
         if jitter_active:
-            tx = float(np.random.uniform(-self._jitter_max_px, self._jitter_max_px))
-            ty = float(np.random.uniform(-self._jitter_max_px, self._jitter_max_px))
+            tx = float(self._cfg.rng.uniform(-self._jitter_max_px, self._jitter_max_px))
+            ty = float(self._cfg.rng.uniform(-self._jitter_max_px, self._jitter_max_px))
         else:
             tx, ty = 0.0, 0.0
 
@@ -183,11 +190,11 @@ class DisturbanceModel:
 
         # 3. Sensor noise stack
         if state.sensor_poisson:
-            img = add_poisson_noise(img)
+            img = add_poisson_noise(img, self._cfg.rng)
         if state.sensor_gaussian_sigma > 0:
-            img = add_gaussian_noise(img, state.sensor_gaussian_sigma)
+            img = add_gaussian_noise(img, state.sensor_gaussian_sigma, self._cfg.rng)
         if state.sensor_sp_percent > 0:
-            img = add_salt_and_pepper_noise(img, state.sensor_sp_percent)
+            img = add_salt_and_pepper_noise(img, state.sensor_sp_percent, self._cfg.rng)
 
         return img
 

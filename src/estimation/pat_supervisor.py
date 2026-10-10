@@ -30,6 +30,7 @@ from src.estimation.kalman import KalmanFilterCV
 from src.estimation.state_machine import StateMachine, TrackingState
 from src.control.pid import PIDController
 from src.control.search_patterns import SpiralSearch, RasterSearch
+from src.units import deg_to_px
 
 
 class PATSupervisor:
@@ -66,9 +67,8 @@ class PATSupervisor:
         )
 
         # PID controllers (one per axis)
-        max_v = cfg.camera.gimbal.max_pan_rate_deg_s * (
-            cfg.camera.resolution[0] / cfg.camera.fov_deg[0]
-        ) / 30.0   # px/frame
+        px_per_deg = cfg.camera.resolution[0] / cfg.camera.fov_deg[0]
+        max_v = deg_to_px(cfg.camera.gimbal.max_pan_rate_deg_s, px_per_deg) / 30.0   # px/frame
 
         self._pid_x = PIDController(cfg.control.kp, cfg.control.ki, cfg.control.kd, max_v, dt=dt)
         self._pid_y = PIDController(cfg.control.kp, cfg.control.ki, cfg.control.kd, max_v, dt=dt)
@@ -250,6 +250,22 @@ class PATSupervisor:
 
             err_x = kf_x - gimbal_x
             err_y = kf_y - gimbal_y
+
+            # Lock window: dead-zone — do not chase residual error < lock_window_px
+            lock_win = getattr(self._cfg.control, 'lock_window_px', 0.0)
+            if state == TrackingState.LOCKED:
+                import math
+                dist = math.hypot(err_x, err_y)
+                if dist < lock_win:
+                    # Inside window — hold position, reset integrators to prevent windup
+                    self._pid_x.reset_integral()
+                    self._pid_y.reset_integral()
+                    return PATCommand(
+                        mode="HOLD", x=0, y=0,
+                        pat_state=state.name,
+                        kf_pred_x=kf_x, kf_pred_y=kf_y
+                    )
+
             vx = self._pid_x.compute(err_x) + kv_x * self._dt
             vy = self._pid_y.compute(err_y) + kv_y * self._dt
             return PATCommand(

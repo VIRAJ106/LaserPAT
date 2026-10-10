@@ -66,9 +66,8 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
     # --- Beacon initial position ---
     loc = cfg.beacon.initial_location
     if loc == "random":
-        import random
-        bx = random.uniform(100, cfg.environment.world_size[0] - 100)
-        by = random.uniform(100, cfg.environment.world_size[1] - 100)
+        bx = cfg.rng.uniform(100, cfg.environment.world_size[0] - 100)
+        by = cfg.rng.uniform(100, cfg.environment.world_size[1] - 100)
     elif loc == "center":
         bx, by = world_center_x, world_center_y
     elif loc == "top-left":
@@ -86,8 +85,7 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
     # --- Beacon motion ---
     motion_type = cfg.beacon.motion.lower()
     if motion_type == "straight":
-        import random
-        angle = random.uniform(0, 2 * math.pi)
+        angle = cfg.rng.uniform(0, 2 * math.pi)
         bmotion = StraightMotion((bx, by), speed=0.5, angle_rad=angle)
     elif motion_type == "circular":
         bmotion = CircularMotion((world_center_x, world_center_y), radius=150.0, angular_speed=0.005)
@@ -101,11 +99,11 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
             f"Must be one of: straight, circular, figure8, random"
         )
 
-    beacon = Beacon(cfg.beacon.shape, cfg.beacon.size_px, bmotion)
+    beacon = Beacon(cfg.beacon.shape, cfg.beacon.size_px, bmotion, rng=cfg.rng) if 'rng' in Beacon.__init__.__code__.co_varnames else Beacon(cfg.beacon.shape, cfg.beacon.size_px, bmotion)
 
     # --- Platform (stationary relative to world by default) ---
     pmotion  = StraightMotion((bx, by), speed=0.0)
-    platform = Platform(pmotion, jitter_max_px=cfg.disturbances.max_displacement_px)
+    platform = Platform(pmotion, jitter_max_px=cfg.disturbances.max_displacement_px, rng=cfg.rng)
 
     # --- Distractor beacons (multi-beacon scenario support) ---
     distractors = _build_distractors(cfg, world_center_x, world_center_y)
@@ -185,8 +183,19 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
             # ── Step 5: Candidate management ─────────────────────────────
             identity = cand_manager.update(percept_result)
 
-            # ── Step 6: PAT supervisor → command ─────────────────────────
+            # ── Step 5b: Convert sensor-pixel candidates → world coords ───
+            # Candidates (cx,cy) are in viewport pixel space (0..W, 0..H).
+            # The Kalman filter and PID operate in world space (0..2000).
+            # Transform: world = gimbal_center - fov_half + sensor_pixel
             gx, gy = gimbal.get_position()
+            fov_half_w = cfg.camera.resolution[0] / 2.0
+            fov_half_h = cfg.camera.resolution[1] / 2.0
+            if identity is not None and identity.is_valid:
+                c = identity.candidate
+                c.cx = gx - fov_half_w + c.cx
+                c.cy = gy - fov_half_h + c.cy
+
+            # ── Step 6: PAT supervisor → command ─────────────────────────
             cmd    = supervisor.step(identity, gimbal_x=gx, gimbal_y=gy)
 
             # ── Step 7: Actuate (ServoLoop is now in the pipeline) ────────
@@ -251,7 +260,11 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
 # ---------------------------------------------------------------------------
 
 def _compute_tracking_error(identity, beacon) -> float:
-    """Return Euclidean error between detected centroid and beacon ground truth."""
+    """Return Euclidean error between detected centroid (world coords) and beacon ground truth.
+    
+    NOTE: By the time this is called, identity.candidate.cx/cy have already been
+    converted from sensor-pixel space to world space in the main loop (Step 5b).
+    """
     if identity is not None and identity.is_valid:
         return math.hypot(
             identity.candidate.cx - beacon.x,
@@ -262,22 +275,23 @@ def _compute_tracking_error(identity, beacon) -> float:
 
 def _build_distractors(cfg, world_cx: float, world_cy: float):
     """Instantiate distractor beacons from config."""
-    import math as _math, random as _random
+    import math as _math
     distractors = []
     for dc in getattr(cfg.beacon, 'distractors', []):
         loc = dc.initial_location
         if loc == "random":
-            dx = _random.uniform(100, cfg.environment.world_size[0] - 100)
-            dy = _random.uniform(100, cfg.environment.world_size[1] - 100)
+            dx = cfg.rng.uniform(100, cfg.environment.world_size[0] - 100)
+            dy = cfg.rng.uniform(100, cfg.environment.world_size[1] - 100)
         else:
             dx, dy = world_cx, world_cy
 
         dmotion = StraightMotion(
             (dx, dy),
             speed=0.5,
-            angle_rad=_random.uniform(0, 2 * _math.pi),
+            angle_rad=cfg.rng.uniform(0, 2 * _math.pi),
         )
-        distractors.append(Beacon(dc.shape, dc.size_px, dmotion))
+        beacon = Beacon(dc.shape, dc.size_px, dmotion, rng=cfg.rng) if 'rng' in Beacon.__init__.__code__.co_varnames else Beacon(dc.shape, dc.size_px, dmotion)
+        distractors.append(beacon)
     return distractors
 
 
