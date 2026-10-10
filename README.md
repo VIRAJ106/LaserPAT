@@ -5,6 +5,9 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Status: Release Candidate](https://img.shields.io/badge/status-release%20candidate-green.svg)]()
+[![Dashboard](https://img.shields.io/badge/Dashboard-Live-brightgreen.svg)](https://web-dashboard-woad-two.vercel.app/)
+
+**🌐 Live Dashboard:** [https://web-dashboard-woad-two.vercel.app/](https://web-dashboard-woad-two.vercel.app/)
 
 ---
 
