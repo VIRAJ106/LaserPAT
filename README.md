@@ -75,6 +75,7 @@ pip install -e .
 python main.py --gui
 ```
 
+
 ### Run Benchmark
 ```bash
 python scripts/evaluate_setA.py
