@@ -89,9 +89,16 @@ class KalmanFilterCV:
         # Adaptive innovation gate: use pixel-space Euclidean distance as primary gate.
         # This avoids the problem where P collapses after lock and the normalised
         # Mahalanobis distance grows huge even for small, valid measurement noise.
-        # Gate: reject only if measurement is extremely far (effectively no gate for simulation)
+        # Gate: reject only if measurement is extremely far or based on velocity
         pixel_dist = float(np.sqrt(y[0,0]**2 + y[1,0]**2))
-        if pixel_dist > 2500.0:
+        
+        vx, vy = self.get_velocity()
+        v_mag = np.hypot(vx, vy)
+        
+        # Base gate + velocity dependent gate (e.g. 10 frames of velocity)
+        adaptive_gate = max(80.0, 50.0 + v_mag * self.dt * 10.0)
+        
+        if pixel_dist > adaptive_gate:
             return False  # True clutter / multipath — reject
             
         # Kalman Gain

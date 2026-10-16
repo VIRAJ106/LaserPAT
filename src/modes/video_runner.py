@@ -35,6 +35,7 @@ from src.camera.camera_source import VideoCameraSource
 from src.detection.perception import build_perception
 from src.detection.candidate_manager import CandidateManager
 from src.estimation.pat_supervisor import PATSupervisor
+from src.estimation.pipeline import PATPipeline
 from src.estimation.state_machine import TrackingState
 from src.logging.csv_logger import CSVLogger, FrameRecord
 
@@ -109,6 +110,8 @@ def run_video(
         cfg.environment.world_size = (frame_w, frame_h)
         supervisor = PATSupervisor(cfg, dt=dt)
         supervisor.start_search()
+        
+        pipeline = PATPipeline(cfg, perception, supervisor, video_mode=True)
 
         # ------------------------------------------------------------------
         # Main loop
@@ -124,14 +127,11 @@ def run_video(
 
                 timestamp = frame_idx * dt
 
-                # ── Perceive (shared pipeline) ─────────────────────────
-                percept_result = perception.run(gray, frame_id=frame_idx)
-
-                # ── Candidate management (shared pipeline) ─────────────
-                identity = cand_manager.update(percept_result)
-
-                # ── PAT supervisor (shared pipeline) ───────────────────
-                cmd = supervisor.step(identity, gimbal_x=gim_x, gimbal_y=gim_y)
+                # ── Pipeline ───────────────────────────────────────────────
+                res = pipeline.step(gray, gim_x, gim_y, frame_id=frame_idx)
+                percept_result = res.percept_result
+                identity = res.identity
+                cmd = res.command
 
                 # Apply virtual gimbal from command
                 if cmd.mode == "POSITION":
@@ -153,8 +153,8 @@ def run_video(
                     identity.candidate.ai_confidence
                     if identity and identity.is_valid else 0.0
                 )
-                det_x = identity.candidate.cx if identity and identity.is_valid else 0.0
-                det_y = identity.candidate.cy if identity and identity.is_valid else 0.0
+                det_x = identity.candidate.cx if identity and identity.is_valid else -1.0
+                det_y = identity.candidate.cy if identity and identity.is_valid else -1.0
                 euclidean_error = (
                     math.hypot(det_x - gim_x, det_y - gim_y)
                     if identity and identity.is_valid else float("inf")
@@ -166,6 +166,7 @@ def run_video(
                     timestamp=round(timestamp, 4),
                     state=cmd.pat_state,
                     tracking_error_px=round(euclidean_error, 3) if not math.isinf(euclidean_error) else -1.0,
+                    centroid_error_px=-1.0,
                     gimbal_x=round(gim_x, 2),
                     gimbal_y=round(gim_y, 2),
                     target_x=round(det_x, 2),

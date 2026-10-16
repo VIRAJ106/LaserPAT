@@ -319,50 +319,14 @@ class ProcessingWorker(QThread):
         self.running = False
         self.current_state = "IDLE"  # NEW: Track current state for world view
         
-        from src.detection.neural import NeuralDetector
-        import os
-        
-        # PRIMARY DETECTOR: YOLOv8 (AI-based perception)
-        yolo_path = "models/yolov8n.onnx"
-        self.yolo_detector = NeuralDetector(yolo_path) if os.path.exists(yolo_path) else None
-        
-        # VERIFIER: CNN Patch Verifier (used if OpenCV fallback is triggered)
-        self.ai_verifier = AIVerifier("models/patch_verifier_cnn.onnx")
-        self.kf = KalmanFilterCV(dt=1.0/60.0)
-        self.sm = StateMachine(lock_threshold_px=self.cfg.estimation.lock_threshold_px,
-                               required_lock_frames=self.cfg.estimation.lock_frames)
-        # max_output driven by actual gimbal velocity cap (resolved at runtime from cfg)
-        gimbal_max_v = (self.cfg.camera.gimbal.max_pan_rate_deg_s
-                        * (self.cfg.camera.resolution[0] / self.cfg.camera.fov_deg[0])
-                        / 60.0)  # px/frame at 60 fps
-        self.pid_x = PIDController(self.cfg.control.kp, self.cfg.control.ki,
-                                   self.cfg.control.kd, gimbal_max_v, dt=1.0/60.0)
-        self.pid_y = PIDController(self.cfg.control.kp, self.cfg.control.ki,
-                                   self.cfg.control.kd, gimbal_max_v, dt=1.0/60.0)
-        
-        bx, by = self.cfg.environment.world_size[0]/2, self.cfg.environment.world_size[1]/2
-        # NEW: Pass world bounds AND FOV dims to spiral search for proper clamping
-        self.search = SpiralSearch(
-            bx, by, 
-            fov_size=self.cfg.camera.resolution[1],
-            world_bounds=tuple(self.cfg.environment.world_size),
-            fov_dims=tuple(self.cfg.camera.resolution)
-        )
-        self.raster = RasterSearch(
-            bx, by,
-            search_w=float(self.cfg.environment.world_size[0]) * 0.9,
-            search_h=float(self.cfg.environment.world_size[1]) * 0.9,
-            col_spacing=300.0,   # ~half FOV width (640px) for overlap
-            row_spacing=200.0,   # ~half FOV height (480px) for overlap
-            dwell_time=0.25,     # 0.25s per point = ~15 frames at 60Hz
-            world_bounds=tuple(self.cfg.environment.world_size),
-            fov_dims=tuple(self.cfg.camera.resolution)
-        )
-        self._spiral_time = 0.0
-        self._spiral_max_time = 4.0   # seconds; switch to raster after this
-        self._use_raster = False
-        self._last_known_x = bx
-        self._last_known_y = by
+        from src.detection.perception import build_perception
+        from src.estimation.pat_supervisor import PATSupervisor
+        from src.estimation.pipeline import PATPipeline
+
+        self.perception = build_perception(self.cfg)
+        self.supervisor = PATSupervisor(self.cfg, dt=1.0/60.0)
+        self.supervisor.start_search()
+        self.pipeline = PATPipeline(self.cfg, self.perception, self.supervisor)
         
         self.latest_data = None
         self.mutex = QMutex()
@@ -373,7 +337,7 @@ class ProcessingWorker(QThread):
             
     def run(self):
         self.running = True
-        self.sm.start_search()
+        self.supervisor.start_search()
         last_frame_time = time.perf_counter()
         
         while self.running:
@@ -399,187 +363,53 @@ class ProcessingWorker(QThread):
                 self.cfg.disturbances.salt_and_pepper_percent
             )
             
-            # ── AI-First Detection Pipeline (YOLOv8 + OpenCV Fallback) ──
-            # Attempt primary detection with YOLOv8 if available
-            ai_active_primary = False
-            if hasattr(self, 'yolo_detector') and self.yolo_detector is not None:
-                candidates = self.yolo_detector.detect(noisy)
-                if len(candidates) > 0:
-                    ai_active_primary = True
+            # ── Unified Pipeline ──────────────────────────────────────────
+            res = self.pipeline.step(noisy, gt["gimbal_x"], gt["gimbal_y"])
             
-            # If AI primary detector fails or is missing, use OpenCV classical fallback
-            if not ai_active_primary:
-                candidates = extract_candidates(noisy)
-                # ── Size Discriminator ──
-                # Filter candidates to those whose bounding box matches the target size,
-                # which perfectly rejects random noise blobs.
-                target_sz = self.cfg.beacon.target_size_px
-                ref_w = target_sz[0] if target_sz[0] > 0 else self.cfg.beacon.size_px[0]
-                ref_h = target_sz[1] if target_sz[1] > 0 else self.cfg.beacon.size_px[1]
-                candidates = size_discriminate(
-                    candidates, ref_w, ref_h,
-                    tolerance=self.cfg.beacon.size_tolerance
-                )
-            
-            valid_det = False
-            err = float('inf')
-            dw_x, dw_y = 0.0, 0.0
-            best_score = 0.0
-            
-            # Convert to BGR for drawing colored overlays
+            cmd = res.command
+            identity = res.identity
+            state = self.supervisor.state
+            self.current_state = state
+
+            # Actuation
+            if cmd.mode == "POSITION":
+                self.sim_worker.command_position(cmd.x, cmd.y)
+            elif cmd.mode == "VELOCITY":
+                self.sim_worker.command_velocity(cmd.x, cmd.y)
+            else:
+                pass  # self.sim_worker.hold() # assume hold logic
+
+            # Rendering
             display_frame = cv2.cvtColor(noisy, cv2.COLOR_GRAY2BGR)
             
-            if len(candidates) > 0:
-                centroids = []
-                for cand in candidates:
-                    cx, cy = calculate_centroid(noisy, cand)
-                    centroids.append((cx, cy))
-                    
-                scores = self.ai_verifier.extract_and_verify(noisy, centroids)
-                
-                # ── Classical fallback when ONNX model is absent ─────────────
-                # If AI verifier is disabled (model not found), scores are all 0.0.
-                # In that case, fall back to using the candidate with the best
-                # intensity-weighted area (largest bright blob) as the target.
-                ai_active = any(s > 0.1 for s in scores)
-                
-                best_idx = -1
-                if ai_active_primary:
-                    # Primary YOLOv8 already evaluated the boxes
-                    # Pick the largest or highest confidence (here we just pick largest for simplicity since NeuralDetector currently doesn't return conf)
-                    best_area = 0
-                    for i, cand in enumerate(candidates):
-                        x, y, w, h, *_ = cand
-                        area = w * h
-                        if area > best_area:
-                            best_area = area
-                            best_idx = i
-                            best_score = 0.9 # High confidence from YOLO
-                elif ai_active:
-                    # AI Verification path (OpenCV + CNN patch verifier): pick highest score above threshold
-                    for i, score in enumerate(scores):
-                        if score > 0.5 and score > best_score:
-                            best_score = score
-                            best_idx = i
-                else:
-                    # Classical path: pick candidate with largest area
-                    best_area = 0
-                    for i, cand in enumerate(candidates):
-                        x, y, w, h, *_ = cand
-                        area = w * h
-                        if area > best_area:
-                            best_area = area
-                            best_idx = i
-                            best_score = 0.6  # Synthetic confidence for classical mode
-                
-                if best_idx != -1:
-                    cx, cy = centroids[best_idx]
-                    
-                    # FIXED: Use correct viewport bounds calculation
-                    # Viewport bounds: gimbal center ± (width/2, height/2)
-                    gx, gy = gt["gimbal_x"], gt["gimbal_y"]
-                    viewport_w = self.cfg.camera.resolution[0]
-                    viewport_h = self.cfg.camera.resolution[1]
-                    left = gx - viewport_w / 2.0
-                    top = gy - viewport_h / 2.0
-                    w_x = left + cx
-                    w_y = top + cy
-                    dw_x, dw_y = w_x, w_y
-                    valid_det = True
-                    # Tracking error is the distance from the target to the center of the FOV
-                    err = math.hypot(cx - viewport_w / 2.0, cy - viewport_h / 2.0)
-                    
-                    # Draw AI Detection bounding box
-                    cv2.rectangle(display_frame, (int(cx)-16, int(cy)-16), (int(cx)+16, int(cy)+16), (0, 255, 0), 2)
-                    
-            self.kf.predict()
-            if valid_det:
-                valid_det = self.kf.update(dw_x, dw_y)
+            if identity is not None and identity.is_valid:
+                # identity.candidate coords are in world space now.
+                # Project back to sensor viewport for drawing.
+                fov_half_w = self.cfg.camera.resolution[0] / 2.0
+                fov_half_h = self.cfg.camera.resolution[1] / 2.0
+                sens_x = identity.candidate.cx - gt["gimbal_x"] + fov_half_w
+                sens_y = identity.candidate.cy - gt["gimbal_y"] + fov_half_h
+                cv2.rectangle(display_frame, (int(sens_x)-16, int(sens_y)-16), (int(sens_x)+16, int(sens_y)+16), (0, 255, 0), 2)
             
-            # Track previous state for transition detection
-            prev_state = self.sm.state
-            state = self.sm.update(valid_det, err)
-            self.current_state = state  # NEW: Store for world view
-            
-            # NEW: If transitioning from LOST → SEARCH, reset to last known position
-            # and reset Kalman so stale velocity doesn't bias next REACQUIRE slew.
-            if prev_state == TrackingState.LOST and state == TrackingState.SEARCH:
-                self.search.reset(self._last_known_x, self._last_known_y)
-                self.raster.reset(self._last_known_x, self._last_known_y)
-                self._spiral_time = 0.0
-                self._use_raster = False
-                self.sim_worker.command_position(self._last_known_x, self._last_known_y)
-                self.pid_x.reset()
-                self.pid_y.reset()
-                self.kf.reset()
-                
-            # Control Logic
-            if state == TrackingState.SEARCH:
-                # Phase 1: spiral from last known; Phase 2: raster for full coverage
-                self._spiral_time += dt
-                if self._spiral_time > self._spiral_max_time and not self._use_raster:
-                    self._use_raster = True
-                    self.raster.reset(self._last_known_x, self._last_known_y)
-                if self._use_raster:
-                    sx, sy = self.raster.step(dt)
-                else:
-                    sx, sy = self.search.step(dt)
-                self.sim_worker.command_position(sx, sy)
-            elif state == TrackingState.REACQUIRE:
-                # REACQUIRE: Slew to KF predicted position (not blind spiral).
-                # Also update last known position and reset search state.
-                px, py = self.kf.get_position()
-                self._last_known_x, self._last_known_y = px, py
-                self._spiral_time = 0.0
-                self._use_raster = False
-                self.search.reset(px, py)
-                
-                kv_x, kv_y = self.kf.get_velocity()
-                vx = self.pid_x.compute(px - gt["gimbal_x"]) + (kv_x * (1.0 / 60.0))
-                vy = self.pid_y.compute(py - gt["gimbal_y"]) + (kv_y * (1.0 / 60.0))
-                self.sim_worker.command_velocity(vx, vy)
-            elif state in [TrackingState.ACQUIRE, TrackingState.LOCKED, TrackingState.COAST]:
-                px, py = self.kf.get_position()
-                
-                if prev_state in [TrackingState.SEARCH, TrackingState.LOST]:
-                    # User requested: "when we acquire the beacon at first can we put trackers center exactly on beacon"
-                    self.sim_worker.command_position(px, py, snap=True)
-                    self.pid_x.reset()
-                    self.pid_y.reset()
-                else:
-                    # Update last known position continuously while tracking is good
-                    gx_now, gy_now = gt["gimbal_x"], gt["gimbal_y"]
-                    self._last_known_x, self._last_known_y = gx_now, gy_now
-                    self._spiral_time = 0.0
-                    self._use_raster = False
-                    self.search.reset(gx_now, gy_now)
-                    
-                    kv_x, kv_y = self.kf.get_velocity()
-                    vx = self.pid_x.compute(px - gt["gimbal_x"]) + (kv_x * (1.0 / 60.0))
-                    vy = self.pid_y.compute(py - gt["gimbal_y"]) + (kv_y * (1.0 / 60.0))
-                    self.sim_worker.command_velocity(vx, vy)
-                
-                # Draw Kalman state crosshair and covariance ellipse
+            if state.name in ["ACQUIRE", "LOCKED", "COAST"]:
+                px, py = self.supervisor.kf.get_position()
                 kx = px - gt["gimbal_x"] + self.cfg.camera.resolution[0]/2
                 ky = py - gt["gimbal_y"] + self.cfg.camera.resolution[1]/2
                 cv2.drawMarker(display_frame, (int(kx), int(ky)), (0, 0, 255), cv2.MARKER_CROSS, 20, 2)
-                
-                # Draw Gimbal Boresight (fixed center crosshair)
-                cx_center = int(self.cfg.camera.resolution[0] // 2)
-                cy_center = int(self.cfg.camera.resolution[1] // 2)
-                cv2.drawMarker(display_frame, (cx_center, cy_center), (255, 255, 255), cv2.MARKER_CROSS, 40, 1)
-                
-                radius = int(math.sqrt(self.kf.P[0,0] + self.kf.P[2,2]) * 2)
+                radius = int(math.sqrt(self.supervisor.kf.P[0,0] + self.supervisor.kf.P[2,2]) * 2)
                 if radius > 0:
                     cv2.circle(display_frame, (int(kx), int(ky)), min(radius, 100), (0, 255, 255), 1)
-                
-            # Render State
+            
+            cv2.drawMarker(display_frame, (int(self.cfg.camera.resolution[0]/2), int(self.cfg.camera.resolution[1]/2)), (255, 255, 255), cv2.MARKER_CROSS, 40, 1)
             cv2.putText(display_frame, state.name, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
 
             process_end = time.perf_counter()
             latency_ms = (process_end - process_start) * 1000.0
             fps = 1.0 / (process_end - last_frame_time + 1e-6)
             last_frame_time = process_end
+            
+            err = math.hypot(identity.candidate.cx - gt["gimbal_x"], identity.candidate.cy - gt["gimbal_y"]) if (identity and identity.is_valid) else float('inf')
+            best_score = identity.candidate.ai_confidence if (identity and identity.is_valid) else 0.0
 
             self.processed_frame_ready.emit(display_frame)
             stats = {

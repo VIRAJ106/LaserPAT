@@ -42,9 +42,9 @@ from src.disturbances.disturbance_model import DisturbanceModel
 from src.detection.perception import build_perception
 from src.detection.candidate_manager import CandidateManager
 
-# Estimation + PAT control
 from src.estimation.pat_supervisor import PATSupervisor
 from src.estimation.handoff import evaluate_handoff
+from src.estimation.pipeline import PATPipeline
 
 # Actuator
 from src.control.servo_loop import ServoLoop
@@ -53,8 +53,14 @@ from src.control.servo_loop import ServoLoop
 from src.logging.csv_logger import CSVLogger, FrameRecord
 
 
-def run_scenario(config_path: str, headless: bool = True, output_csv: str = None):
+def run_scenario(config_path: str, headless: bool = True, output_csv: str = None, seed_override: int = None):
     cfg = load_config(config_path)
+    # Allow the caller (e.g. stress_gate.py) to inject a per-run seed so that
+    # each Monte Carlo run gets independent randomness without touching the YAML.
+    if seed_override is not None:
+        import numpy as _np
+        cfg.seed = seed_override
+        cfg.rng = _np.random.default_rng(seed_override)
 
     # ------------------------------------------------------------------
     # 1.  World / environment setup
@@ -66,9 +72,8 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
     # --- Beacon initial position ---
     loc = cfg.beacon.initial_location
     if loc == "random":
-        import random
-        bx = random.uniform(100, cfg.environment.world_size[0] - 100)
-        by = random.uniform(100, cfg.environment.world_size[1] - 100)
+        bx = cfg.rng.uniform(100, cfg.environment.world_size[0] - 100)
+        by = cfg.rng.uniform(100, cfg.environment.world_size[1] - 100)
     elif loc == "center":
         bx, by = world_center_x, world_center_y
     elif loc == "top-left":
@@ -86,8 +91,7 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
     # --- Beacon motion ---
     motion_type = cfg.beacon.motion.lower()
     if motion_type == "straight":
-        import random
-        angle = random.uniform(0, 2 * math.pi)
+        angle = cfg.rng.uniform(0, 2 * math.pi)
         bmotion = StraightMotion((bx, by), speed=0.5, angle_rad=angle)
     elif motion_type == "circular":
         bmotion = CircularMotion((world_center_x, world_center_y), radius=150.0, angular_speed=0.005)
@@ -101,11 +105,11 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
             f"Must be one of: straight, circular, figure8, random"
         )
 
-    beacon = Beacon(cfg.beacon.shape, cfg.beacon.size_px, bmotion)
+    beacon = Beacon(cfg.beacon.shape, cfg.beacon.size_px, bmotion, rng=cfg.rng) if 'rng' in Beacon.__init__.__code__.co_varnames else Beacon(cfg.beacon.shape, cfg.beacon.size_px, bmotion)
 
     # --- Platform (stationary relative to world by default) ---
     pmotion  = StraightMotion((bx, by), speed=0.0)
-    platform = Platform(pmotion, jitter_max_px=cfg.disturbances.max_displacement_px)
+    platform = Platform(pmotion, jitter_max_px=cfg.disturbances.max_displacement_px, rng=cfg.rng)
 
     # --- Distractor beacons (multi-beacon scenario support) ---
     distractors = _build_distractors(cfg, world_center_x, world_center_y)
@@ -113,9 +117,17 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
     # ------------------------------------------------------------------
     # 2.  Camera subsystem
     # ------------------------------------------------------------------
+    # --- Camera initial position (independent of beacon) ---
+    cam_loc = getattr(cfg.camera, "initial_position", "center")
+    if cam_loc == "random":
+        cx = cfg.rng.uniform(100, cfg.environment.world_size[0] - 100)
+        cy = cfg.rng.uniform(100, cfg.environment.world_size[1] - 100)
+    else:
+        cx, cy = world_center_x, world_center_y
+
     viewport = Viewport(*cfg.camera.resolution)
     gimbal = Gimbal(
-        start_x=bx, start_y=by,
+        start_x=cx, start_y=cy,
         max_rate_deg_s=cfg.camera.gimbal.max_pan_rate_deg_s,
         world_bounds=tuple(cfg.environment.world_size),
         fov_size=tuple(cfg.camera.resolution),
@@ -140,8 +152,10 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
     # 5.  PAT supervisor (wraps KF + StateMachine + PID + search)
     # ------------------------------------------------------------------
     dt         = 1.0 / 30.0
+    perception = build_perception(cfg)
     supervisor = PATSupervisor(cfg, dt=dt)
     supervisor.start_search()
+    pipeline = PATPipeline(cfg, perception, supervisor)
 
     # ------------------------------------------------------------------
     # 6.  Actuator (ServoLoop — now actually wired into the pipeline)
@@ -178,16 +192,14 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
             raw_frame      = camera.capture_frame()
             disturbed_frame = disturb_model.apply_to_frame(raw_frame, d_state)
 
-            # ── Step 4: Perceive ──────────────────────────────────────────
+            # ── Step 4-6: Pipeline (Perceive, Manage, Track, Command) ────
             frame_start    = time.time()
-            percept_result = perception.run(disturbed_frame, frame_id=frame_idx)
-
-            # ── Step 5: Candidate management ─────────────────────────────
-            identity = cand_manager.update(percept_result)
-
-            # ── Step 6: PAT supervisor → command ─────────────────────────
             gx, gy = gimbal.get_position()
-            cmd    = supervisor.step(identity, gimbal_x=gx, gimbal_y=gy)
+            res = pipeline.step(disturbed_frame, gx, gy, frame_id=frame_idx)
+            
+            percept_result = res.percept_result
+            identity = res.identity
+            cmd = res.command
 
             # ── Step 7: Actuate (ServoLoop is now in the pipeline) ────────
             if cmd.mode == "VELOCITY":
@@ -199,11 +211,14 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
             servo.step(dt)
 
             # ── Step 8: Coarse-to-fine handoff evaluation ─────────────────
-            tracking_error_px = _compute_tracking_error(identity, beacon)
+            centroid_error_px = _compute_tracking_error(identity, beacon)
+            gx_post, gy_post = gimbal.get_position()
+            boresight_error_px = math.hypot(gx_post - beacon.x, gy_post - beacon.y)
+            
             handoff = evaluate_handoff(
                 supervisor,
                 cfg.link_budget_model,
-                tracking_error_px=tracking_error_px,
+                tracking_error_px=boresight_error_px,
                 fov_deg=cfg.camera.fov_deg[0],
                 res_px=cfg.camera.resolution[0],
             )
@@ -211,13 +226,13 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
             # ── Step 9: Log frame ─────────────────────────────────────────
             ai_score     = identity.candidate.ai_confidence if identity and identity.is_valid else 0.0
             frame_time   = time.time() - frame_start
-            gx_post, gy_post = gimbal.get_position()
 
             record = FrameRecord(
                 frame_id=frame_idx,
                 timestamp=frame_idx * dt,
                 state=cmd.pat_state,
-                tracking_error_px=tracking_error_px if math.isfinite(tracking_error_px) else 0.0,
+                tracking_error_px=boresight_error_px if math.isfinite(boresight_error_px) else 0.0,
+                centroid_error_px=centroid_error_px if math.isfinite(centroid_error_px) else 0.0,
                 gimbal_x=gx_post,
                 gimbal_y=gy_post,
                 target_x=beacon.x,
@@ -231,7 +246,7 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
             if not headless and frame_idx % 30 == 0:
                 print(
                     f"Frame {frame_idx:5d} | State: {cmd.pat_state:<10} "
-                    f"| Err: {tracking_error_px:.2f}px "
+                    f"| Boresight Err: {boresight_error_px:.2f}px "
                     f"| Backend: {percept_result.backend_used} "
                     f"| Link: {handoff.link_status} ({handoff.margin_dB:.1f} dB margin)"
                 )
@@ -251,7 +266,11 @@ def run_scenario(config_path: str, headless: bool = True, output_csv: str = None
 # ---------------------------------------------------------------------------
 
 def _compute_tracking_error(identity, beacon) -> float:
-    """Return Euclidean error between detected centroid and beacon ground truth."""
+    """Return Euclidean error between detected centroid (world coords) and beacon ground truth.
+    
+    NOTE: By the time this is called, identity.candidate.cx/cy have already been
+    converted from sensor-pixel space to world space in the main loop (Step 5b).
+    """
     if identity is not None and identity.is_valid:
         return math.hypot(
             identity.candidate.cx - beacon.x,
@@ -262,22 +281,23 @@ def _compute_tracking_error(identity, beacon) -> float:
 
 def _build_distractors(cfg, world_cx: float, world_cy: float):
     """Instantiate distractor beacons from config."""
-    import math as _math, random as _random
+    import math as _math
     distractors = []
     for dc in getattr(cfg.beacon, 'distractors', []):
         loc = dc.initial_location
         if loc == "random":
-            dx = _random.uniform(100, cfg.environment.world_size[0] - 100)
-            dy = _random.uniform(100, cfg.environment.world_size[1] - 100)
+            dx = cfg.rng.uniform(100, cfg.environment.world_size[0] - 100)
+            dy = cfg.rng.uniform(100, cfg.environment.world_size[1] - 100)
         else:
             dx, dy = world_cx, world_cy
 
         dmotion = StraightMotion(
             (dx, dy),
             speed=0.5,
-            angle_rad=_random.uniform(0, 2 * _math.pi),
+            angle_rad=cfg.rng.uniform(0, 2 * _math.pi),
         )
-        distractors.append(Beacon(dc.shape, dc.size_px, dmotion))
+        beacon = Beacon(dc.shape, dc.size_px, dmotion, rng=cfg.rng) if 'rng' in Beacon.__init__.__code__.co_varnames else Beacon(dc.shape, dc.size_px, dmotion)
+        distractors.append(beacon)
     return distractors
 
 

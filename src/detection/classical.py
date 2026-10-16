@@ -17,8 +17,17 @@ def extract_candidates(image: np.ndarray, threshold: int = 80,
     # 3x3 median filter is very effective against salt & pepper
     denoised = cv2.medianBlur(image, 3)
     
-    # 2. Threshold
-    _, thresh = cv2.threshold(denoised, threshold, 255, cv2.THRESH_BINARY)
+    # 2. Threshold (Adaptive MAD-based)
+    median_val = np.median(denoised)
+    mad = np.median(np.abs(denoised - median_val))
+    sigma = 1.4826 * mad
+    
+    # Use 6 sigma above median for robust threshold, ensuring we don't go below user threshold or a minimum
+    adaptive_thresh = median_val + 6.0 * sigma
+    final_thresh = int(max(threshold if threshold >= 0 else 10, adaptive_thresh))
+    final_thresh = min(final_thresh, 254) # Must be < 255
+    
+    _, thresh = cv2.threshold(denoised, final_thresh, 255, cv2.THRESH_BINARY)
     
     # 3. Connected Components
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(thresh, connectivity=8)
@@ -88,19 +97,28 @@ def size_discriminate(
 def calculate_centroid(image: np.ndarray, bbox: Tuple[float, float, float, float]) -> Tuple[float, float]:
     """
     Calculates sub-pixel centroid using intensity weighting within the bounding box.
+    Uses a Gaussian window centered on the bounding box to reduce edge noise.
     """
     x, y, w, h = [int(v) for v in bbox]
     
     # Extract ROI
     roi = image[y:y+h, x:x+w].astype(np.float32)
+    if roi.size == 0:
+        return (x + w/2.0, y + h/2.0)
+    
+    Y, X = np.indices(roi.shape)
+    cx_box, cy_box = w / 2.0, h / 2.0
+    sigma_x, sigma_y = max(w / 4.0, 1.0), max(h / 4.0, 1.0)
+    window = np.exp(-(((X - cx_box)**2) / (2 * sigma_x**2) + ((Y - cy_box)**2) / (2 * sigma_y**2)))
+    
+    roi_windowed = roi * window
     
     # Intensity weighted moments
-    total_intensity = np.sum(roi)
+    total_intensity = np.sum(roi_windowed)
     if total_intensity == 0:
-        return (x + w/2.0, y + h/2.0)
+        return (x + cx_box, y + cy_box)
         
-    Y, X = np.indices(roi.shape)
-    cx = np.sum(X * roi) / total_intensity
-    cy = np.sum(Y * roi) / total_intensity
+    cx = np.sum(X * roi_windowed) / total_intensity
+    cy = np.sum(Y * roi_windowed) / total_intensity
     
     return (x + cx, y + cy)

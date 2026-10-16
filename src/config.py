@@ -2,6 +2,7 @@ import yaml
 import os
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Tuple, Optional
+import numpy as np
 
 @dataclass
 class EnvironmentConfig:
@@ -63,6 +64,7 @@ class DetectionConfig:
     acquisition_mode: str = "blind_spiral"
     use_cnn_verifier: bool = True
     backend: str = "classical_cnn"   # "classical_cnn" | "yolo"  (default: classical_cnn)
+    threshold: int = 30              # Pixel intensity threshold for blob detection
 
 @dataclass
 class EstimationConfig:
@@ -83,6 +85,7 @@ class ControlConfig:
     ki: float = 0.05
     kd: float = 0.1
     antiwindup: bool = True
+    lock_window_px: float = 2.0
 
 @dataclass
 class AppConfig:
@@ -97,6 +100,7 @@ class AppConfig:
     estimation: EstimationConfig = field(default_factory=EstimationConfig)
     control: ControlConfig = field(default_factory=ControlConfig)
     link_budget: LinkBudgetConfig = field(default_factory=LinkBudgetConfig)
+    rng: np.random.Generator = field(init=False)
 
 def load_config(path: str) -> AppConfig:
     if not os.path.exists(path):
@@ -110,6 +114,7 @@ def load_config(path: str) -> AppConfig:
         duration_seconds=data.get('scenario', {}).get('duration_seconds', 60),
         seed=data.get('scenario', {}).get('seed', 42)
     )
+    cfg.rng = np.random.default_rng(cfg.seed)
     
     if 'environment' in data:
         cfg.environment.world_size = tuple(data['environment'].get('world_size', (2000, 2000)))
@@ -177,6 +182,7 @@ def load_config(path: str) -> AppConfig:
         cfg.control.ki = pid.get('ki', 0.01)
         cfg.control.kd = pid.get('kd', 0.02)
         cfg.control.antiwindup = pid.get('antiwindup', True)
+        cfg.control.lock_window_px = data['control'].get('lock_window_px', 2.0)
 
     if 'link_budget' in data:
         cfg.link_budget.wavelength_nm = data['link_budget'].get('wavelength_nm', 1550.0)

@@ -16,6 +16,7 @@ class FrameRecord:
     timestamp: float
     state: str
     tracking_error_px: float
+    centroid_error_px: float
     gimbal_x: float
     gimbal_y: float
     target_x: float
