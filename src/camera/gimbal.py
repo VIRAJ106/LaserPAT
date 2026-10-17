@@ -20,7 +20,7 @@ class Gimbal:
         self.y = start_y
 
         self.fps = fps
-        # Conversion: px_per_deg derived from config (fov_size[0] px / fov_deg[0] deg)
+        # Conversion-> px_per_deg derived from config (fov_size[0] px / fov_deg[0] deg)
         # Previously hardcoded to 640/4.0 — now driven by YAML camera.fov_deg
         self.px_per_deg = fov_size[0] / fov_deg[0]
         
