@@ -4,7 +4,7 @@
 
 scenario:
   name: "SIH Problem 22169 Benchmark"
-  duration_seconds: 120          # mandatory — do not reduce
+  duration_seconds: 120          # mandatory ( do not reduce )
   seed: 0                        # fixed seed for reproducibility
 
 environment:
