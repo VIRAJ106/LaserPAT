@@ -6,7 +6,7 @@ scenario:
 environment:
   world_size: [2000, 2000]
   platform_motion:
-    type: "static"           # Platform is stationary by default
+    type: "static"           # Platform is stationary in default
     max_speed_px_frame: 0
 
 beacon:
