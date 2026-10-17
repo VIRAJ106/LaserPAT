@@ -47,7 +47,7 @@ python main.py --gui
 **Stress Test Results (300 runs, YOLOv8+CNN hybrid):**
 - Mean Error: **1.83 px** under 10% S&P noise
 - 95th percentile: **0.61 s** acquisition, **0.71 s** re-acquisition
-- Lock retention: **96.3%** (exceeds 95% target)
+- Lock retention: **96.3%** more than benchmark (95%)
 
 **Ablation Study:**
 - Classical only: 68.4% lock retention
